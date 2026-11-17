@@ -11,7 +11,7 @@ O Data Chat já tem, em `app/domain/services/data_chat/`:
 - `QueryCompiler`, que só aceita inteiros, listas de inteiros e datas, e recusa lista vazia;
 - `ScopeGuard`, que confere o SQL final contra o escopo da sessão (só `SELECT`, allowlist de tabelas, listas `IN` iguais às da sessão, predicado de confiabilidade);
 - `Warehouse` com union de shards por colunas nomeadas, `Freshness` com watermark do PeerDB, `CachedWarehouse` e um usuário ClickHouse somente leitura com limites;
-- fórmulas alinhadas às telas (NPS com arredondamento "meio para longe do zero", média só com alternativas valoradas, múltipla resposta por avaliações distintas).
+- fórmulas alinhadas às telas (NPS com a mesma conta em ponto flutuante, média só com alternativas valoradas, múltipla resposta por avaliações distintas).
 
 ## Decisão
 

@@ -52,7 +52,7 @@ Cada métrica precisa de teste de paridade: num cliente de fixture, o valor da A
 |---|---|---|---|
 | `evaluation_count` | `EvaluationVolume`, `EvaluationsByUnit` | `Results::EvaluationCounts::ConsolidatedCount` | `group_by` channel/completion |
 | `response_count` | parte de `QuestionMeasure` (`answer_count`) | `CountBase#for_question` | Expor como métrica própria; regra de MR (avaliações distintas) |
-| `nps` | `SurveyNps` + `NpsMeasures` | `CountBase#nps` | `group_by` por propriedade (pooled); `null` quando n = 0 |
+| `nps` | `SurveyNps` + `NpsMeasures` | `CountBase#nps` | `group_by` por propriedade (pooled); `null` quando n = 0; reproduzir a conta em double das telas (`round(100.0 × (p/n − d/n))`), inclusive nos empates |
 | `scale_mean` | `QuestionScores` | `CountBase` média | Por id de pergunta; casas por amplitude |
 | `weighted_sum` | — (o chat exclui) | `CountBase#weighted_sum` (`count_base.rb:153-167`) | Template novo |
 | `choice_share` / `multi_response_share` | `ChoiceDistribution` + `ChoiceMeasures` | `CountBase#for_choice`, `ConsolidatedCount` MR | Rótulos por id; `is_valueless` |

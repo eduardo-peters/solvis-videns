@@ -10,9 +10,9 @@ O sistema tem 12 tipos (`answer_type`). O tipo decide quais métricas existem pa
 | `Multiple Response` | Várias alternativas | `multi_response_share`, `response_count` | Porcentagens somam mais de 100% |
 | `Text` | Comentário longo (até 1.000 caracteres) | `response_count`, comentários, `theme_mentions` | Único tipo analisado pelo Radar de Comentários |
 | `Short Text` | Texto curto (até 255) | `response_count`, comentários | Não analisado pelo Radar |
-| `Numeric` | Número digitado | `response_count` | Sem média: o valor é texto livre |
+| `Numeric` | Número digitado (só dígitos, vírgula e ponto) | `response_count` | Sem média: o valor é guardado como texto, com vírgula ou ponto |
 | `Email`, `Phone`, `CPF`, `CNPJ` | Dados de contato e documento | `response_count` | Dado pessoal. Nunca sai como comentário |
-| `Date` | Data digitada (dd/mm/aaaa) | `response_count` | — |
+| `Date` | Data digitada (dia/mês com 1 ou 2 dígitos, separador `/`, `-` ou espaço, ano com 2 ou 4 dígitos) | `response_count` | — |
 
 ## Opções de pergunta que mudam a leitura
 
@@ -21,8 +21,8 @@ O sistema tem 12 tipos (`answer_type`). O tipo decide quais métricas existem pa
 | `metric_kind = weighted_sum` (Scale) | Indicador vira `weighted_sum` (100 × média), em geral lido como % |
 | `reference_zone` (NPS) | `none` esconde zonas; `with_enchantment` acrescenta a Zona de Encantamento (91-100) |
 | `lgpd_protected` | Respostas individuais só com escopo `analytics:lgpd`. Métricas agregadas continuam disponíveis |
-| `mandatory` | Pergunta aberta obrigatória não pode ficar em branco |
-| `choices_ordering = random` | Ordem de exibição aleatória; a distribuição vem ordenada por contagem |
+| `mandatory` | Pergunta aberta ou de múltipla resposta obrigatória (na múltipla resposta, força ao menos uma alternativa) |
+| `choices_ordering = random` ou `random_with_last_fixed` | Ordem de exibição aleatória (a segunda mantém a última alternativa fixa); a distribuição vem ordenada por contagem |
 
 ## Como ler o questionário
 

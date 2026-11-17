@@ -11,16 +11,16 @@ Regras que valem para qualquer análise. Cada uma corresponde a um comportamento
 - **[INV-05] Média só com a escala.** Diga sempre a escala (`scale_min` a `scale_max`). Não compare médias de escalas diferentes. "Não se aplica" e outras alternativas sem valor ficam fora da média e dentro da distribuição.
 - **[INV-06] `weighted_sum` não é média.** Perguntas com `metric_kind = weighted_sum` têm indicador próprio, em geral exibido como %. Não misture com `scale_mean`.
 - **[INV-07] Múltipla resposta passa de 100%.** O denominador são avaliações; cada uma marca várias alternativas. Nunca diga que as porcentagens somam 100%, nem as some.
-- **[INV-08] Temas passam de 100%.** Um comentário cita até 3 temas. A base é `analysed_comments` (ou `tone_comments` com filtro de tom). Se `analysed_comments < period_comments`, diga que o Radar cobriu só essa parte.
-- **[INV-09] Avaliações ≠ respostas.** `evaluation_count` conta respondentes; `response_count` conta respostas a uma pergunta. O n cai ao longo do questionário por causa de incompletas e desvios.
-- **[INV-10] Valores e textos são do questionário atual.** O sistema não guarda versão por avaliação. Se o cliente alterou o valor de uma alternativa ou o texto de uma pergunta, o histórico inteiro é lido com o cadastro novo. O envelope traz o aviso `values_from_current_questionnaire` quando há sinal de edição.
+- **[INV-08] Temas passam de 100%.** Um comentário cita até 3 temas. A base é `analysed_comments` (ou `tone_comments` com filtro de tom). Se `analysed_comments < period_comments`, diga que o Radar cobriu só essa parte. Parte da diferença é permanente (comentários de uma palavra não são analisados), então não prometa que "o resto ainda será analisado".
+- **[INV-09] Avaliações ≠ respostas.** `evaluation_count` conta avaliações (sessões de resposta, sem deduplicar pessoas); `response_count` conta respostas a uma pergunta. O n cai ao longo do questionário por causa de incompletas e desvios. Não chame avaliações de "clientes únicos".
+- **[INV-10] Valores e textos são do questionário atual.** O sistema não guarda versão por avaliação. Mesmo com a pesquisa travada é possível editar texto, posição, tipo e opções da pergunta e o valor das alternativas; o histórico inteiro é lido com o cadastro novo. O envelope traz o aviso `values_from_current_questionnaire` quando o questionário foi editado depois da trava.
 
 ## Identidade e cruzamentos
 
 - **[INV-11] Ids, não nomes.** Resolva nomes com `resolve_entities` antes de consultar. Com mais de um candidato e nenhum exato, pergunte ou declare a escolha.
 - **[INV-12] Não cruze resultados de chamadas diferentes linha a linha.** Se precisar de NPS por unidade e volume por unidade, peça cada métrica com `group_by: [unit]`; não "junte" tabelas pelo nome.
 - **[INV-13] Unidade é a da coleta; propriedade e UF são do cadastro atual.** Se uma loja mudou de regional, o histórico dela aparece na regional nova.
-- **[INV-14] Transferência e cópia de pesquisa duplicam dados.** Não some uma pesquisa com a que recebeu transferência dela.
+- **[INV-14] Transferência de resultados duplica avaliações.** A transferência copia as avaliações para a pesquisa de destino e a origem continua com elas: não some as duas. A cópia de pesquisa leva só o questionário, com ids novos e sem avaliações.
 - **[INV-15] Tag-pai não inclui subtags.** Filtrar por "Atendimento" não pega "Atendimento: Caixa".
 
 ## Tempo

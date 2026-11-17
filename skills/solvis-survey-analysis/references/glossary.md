@@ -11,7 +11,7 @@ Termos que o usuário pode usar e o conceito do modelo a que correspondem.
 | avaliação, resposta (no sentido de "quantas respostas tivemos") | `evaluation_count` | Confirme se é respondentes ou respostas a uma pergunta |
 | nota, satisfação, média, estrelas, carinhas | `scale_mean` (ou `weighted_sum`) | Diga a escala |
 | recomendação, NPS, promotores, detratores, neutros, passivos | `nps` | "Passivos" = neutros |
-| CSAT, top-2-box, % satisfeitos | Não existe como métrica. Mapear para `choice_set_share` ou `weighted_sum` da pergunta indicada | Declarar o mapeamento |
+| CSAT, top-2-box, % satisfeitos | Não existe como métrica. Mapear para `scale_mean`, `weighted_sum` ou `choice_share` da pergunta indicada; a partir da fase 3, `choice_set_share` | Declarar o mapeamento |
 | comentários, elogios, reclamações, sugestões, o que disseram | `search_comments` | |
 | temas, assuntos, motivos, categorias de reclamação | `theme_mentions` (Radar) | |
 | tom, sentimento do texto | `comment_tone` | Tom do texto |

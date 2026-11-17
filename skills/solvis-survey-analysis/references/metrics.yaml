@@ -13,7 +13,10 @@ conventions:
   pooling: >
     Agregar grupos (rede, propriedade de unidade, "todas as unidades") é sempre
     somar as contagens e recalcular. Nunca fazer média dos valores das linhas.
-    O servidor entrega esse agregado em `totals`.
+    O servidor entrega esse agregado em `totals`. Exceção conhecida nas telas: a barra
+    "Outros (N)" do gráfico comparativo faz média ponderada de valores já arredondados
+    (app/domain/services/charts/comparative/category_utils.rb:73-91), então pode diferir
+    do agregado por contagens.
   current_questionnaire: >
     Textos de pergunta/alternativa e valores numéricos das alternativas vêm do
     cadastro ATUAL da pesquisa. Editar o valor de uma alternativa muda o histórico.
@@ -28,7 +31,8 @@ metrics:
     grain: evaluation
     question_required: false
     definition: >
-      Número de avaliações (uma por respondente por pesquisa) cujo started_at cai no período.
+      Número de avaliações (sessões de resposta) cujo started_at cai no período.
+      Não há deduplicação por pessoa: a mesma pessoa pode gerar várias avaliações.
     n: "igual ao valor"
     includes:
       - avaliações incompletas (completed = false), salvo filtro completion=completed_only
@@ -42,7 +46,7 @@ metrics:
     pitfalls:
       - "Avaliações ≠ respostas. Uma avaliação tem várias respostas; para 'quantos responderam a pergunta X' use response_count."
       - "Não é taxa de resposta: o sistema não tem o número de convidados/visitantes."
-    app_refs: ["app/models/results/evaluation_counts/consolidated_count.rb:12-16", "data_chat/catalog/evaluation_volume.rb"]
+    app_refs: ["app/models/results/evaluation_counts/consolidated_count.rb:12-16", "app/domain/services/data_chat/catalog/evaluation_volume.rb"]
 
   - id: response_count
     label: {pt: "Respostas à pergunta", en: "Responses to question", es: "Respuestas a la pregunta"}
@@ -77,7 +81,11 @@ metrics:
       promoters: {scores: [9, 10], pt: "Promotores"}
       passives: {scores: [7, 8], pt: "Neutros"}
       detractors: {scores: [0, 1, 2, 3, 4, 5, 6], pt: "Detratores"}
-    formula: "round(100 × (promoters/n − detractors/n)), arredondamento meio-para-longe-do-zero"
+    formula: >
+      round(100.0 × (promoters/n − detractors/n)) calculado em ponto flutuante (double), como nas telas.
+      Por erro de representação, empates exatos podem arredondar para perto do zero
+      (ex.: 29 promotores, 0 detratores, n = 200 → 14, não 15). A API reproduz a mesma conta
+      para bater com as telas.
     n: "respostas da pergunta com score 0..10"
     breakdown_fields: [promoters, passives, detractors, promoters_pct, passives_pct, detractors_pct]
     null_when: "n = 0 (a API devolve null; as telas mostram 0)"
@@ -85,7 +93,7 @@ metrics:
     display: "inteiro, sem casas, sem símbolo de %"
     comparison_delta: "pontos de NPS (atual − comparado)"
     reference_zones:
-      note: "Só quando a pergunta tem reference_zone diferente de 'none'. Faixas sobre o NPS inteiro."
+      note: "Só quando a pergunta tem reference_zone diferente de 'none' e n > 0 (com n = 0 as telas mostram NPS 0 sem zona). Faixas sobre o NPS inteiro."
       default: {critical: "-100..0", improvement: "1..50", quality: "51..75", excellence: "76..100"}
       with_enchantment: {critical: "-100..0", improvement: "1..50", quality: "51..75", excellence: "76..90", enchantment: "91..100"}
       labels_pt: {critical: "Zona Crítica", improvement: "Zona de Aperfeiçoamento", quality: "Zona de Qualidade", excellence: "Zona de Excelência", enchantment: "Zona de Encantamento"}
@@ -94,7 +102,7 @@ metrics:
       - "Uma pesquisa pode ter mais de uma pergunta NPS. São métricas separadas; não juntar."
       - "Explicar variação pelas porcentagens (promoters_pct, detractors_pct), não pelas contagens."
       - "Não comparar com 'NPS de mercado': a base não tem esse dado."
-    app_refs: ["app/models/results/nps_customer_type.rb:6-15", "app/models/results/answer_counts/count_base.rb:86-90", "app/models/results/answer_counts/utils.rb:5-12", "data_chat/catalog/nps_measures.rb:28-40", "app/helpers/results/reference_zone_helper.rb:18-30"]
+    app_refs: ["app/models/results/nps_customer_type.rb:6-15", "app/models/results/answer_counts/count_base.rb:86-90", "app/models/results/answer_counts/utils.rb:5-12", "app/domain/services/data_chat/catalog/nps_measures.rb:28-40", "app/helpers/results/reference_zone_helper.rb:18-50"]
 
   - id: scale_mean
     label: {pt: "Média da escala", en: "Scale average", es: "Promedio de la escala"}
@@ -117,7 +125,7 @@ metrics:
       - "Não comparar médias de perguntas com escalas diferentes."
       - "O valor da alternativa é o do cadastro atual."
       - "Perguntas weighted_sum não entram: use weighted_sum."
-    app_refs: ["app/models/results/answer_counts/count_base.rb:131-147", "app/models/question.rb:232-234,298-335", "data_chat/catalog/question_scores.rb"]
+    app_refs: ["app/models/results/answer_counts/count_base.rb:131-147", "app/models/question.rb:232-234,298-335", "app/domain/services/data_chat/catalog/question_scores.rb"]
 
   - id: weighted_sum
     label: {pt: "Soma ponderada", en: "Weighted sum", es: "Suma ponderada"}
@@ -133,7 +141,9 @@ metrics:
     n: "respostas a alternativas com valor"
     null_when: "n = 0 (as telas mostram 0)"
     aggregation: "pooled"
-    display: "inteiro; com valores entre 0 e 1 exibido com %"
+    display: >
+      Valor arredondado para inteiro. Exibido com % só quando a faixa de valores das alternativas
+      é exatamente 0 a 1 (faixa ×100 = 0..100). As casas decimais seguem a amplitude da faixa ×100.
     pitfalls:
       - "Não é média. Não misturar com scale_mean na mesma comparação."
     app_refs: ["app/models/results/answer_counts/count_base.rb:153-167"]
@@ -156,7 +166,7 @@ metrics:
     pitfalls:
       - "Em escala, 'Não se aplica' entra no denominador aqui, mas não entra na média."
       - "Alternativa com campo adicional ('Outro: ___') conta como a própria alternativa; o texto vai para comentários."
-    app_refs: ["app/models/results/answer_counts/count_base.rb:44-62", "data_chat/catalog/choice_measures.rb"]
+    app_refs: ["app/models/results/answer_counts/count_base.rb:44-62", "app/domain/services/data_chat/catalog/choice_measures.rb"]
 
   - id: multi_response_share
     label: {pt: "Distribuição de múltipla resposta", en: "Multiple-response distribution", es: "Distribución de respuesta múltiple"}
@@ -175,7 +185,7 @@ metrics:
     sums_to: "pode passar de 100%"
     pitfalls:
       - "Nunca somar as porcentagens nem dizer que somam 100%."
-    app_refs: ["app/models/results/answer_counts/consolidated_count.rb:43-51", "data_chat/narrator_rules.rb:38-42"]
+    app_refs: ["app/models/results/answer_counts/consolidated_count.rb:43-51", "app/domain/services/data_chat/narrator_rules.rb:38-42"]
 
   - id: choice_set_share
     label: {pt: "Parte num conjunto de alternativas", en: "Choice-set share", es: "Parte en un conjunto de alternativas"}
@@ -212,12 +222,13 @@ metrics:
     display: "percentual com 1 casa"
     sums_to: "pode passar de 100% (até 3 temas por comentário)"
     pitfalls:
-      - "Se analysed_comments < period_comments, o Radar cobriu só parte dos comentários: dizer isso."
+      - "Se analysed_comments < period_comments, o Radar cobriu só parte dos comentários: dizer isso. Parte da diferença é permanente: comentários de 1 palavra e itens descartados pelo classificador nunca serão analisados."
       - "Só comentários de perguntas do tipo Text com 2 palavras ou mais são analisados. Short Text não é."
+      - "Temas que o modelo inventou fora da lista do cliente ficam sem id: não contam aqui nem viram tag."
       - "Tom (tone) é o tom do texto lido pelo Radar; não é a nota de quem escreveu."
       - "Temas são o que os respondentes disseram, não causa provada."
       - "A linha 'nenhum tema citado' (tag_id 0) é real e deve ser lida como tal."
-    app_refs: ["data_chat/catalog/comment_themes.rb", "data_chat/catalog/theme_measures.rb", "app/domain/services/comment_radar/classifier.rb"]
+    app_refs: ["app/domain/services/data_chat/catalog/comment_themes.rb", "app/domain/services/data_chat/catalog/theme_measures.rb", "app/domain/services/comment_radar/classifier.rb", "app/domain/services/comment_radar/text_eligibility.rb:10-16"]
 
   - id: data_quality_summary
     label: {pt: "Qualidade de dados", en: "Data quality", es: "Calidad de datos"}
@@ -232,9 +243,10 @@ metrics:
     aggregation: additive
     display: integer
     pitfalls:
-      - "Não classificada (reliable NULL) não significa confiável. Avaliações web costumam ficar não classificadas."
+      - "Não classificada (reliable NULL) não significa confiável."
+      - "No fluxo atual só avaliações de totem passam pelo Data Quality; avaliações web ficam não classificadas, salvo reprocessamento em lote ou edição manual. Com a política reliable_only, avaliações web praticamente somem."
       - "Uma regra violada sozinha pode não derrubar a avaliação: a estratégia padrão soma pesos e reprova a partir de 1,0."
-    app_refs: ["data_chat/catalog/data_quality_summary.rb", "app/domain/services/data_quality/rule_set.rb:101-142"]
+    app_refs: ["app/domain/services/data_chat/catalog/data_quality_summary.rb", "app/domain/services/data_quality/rule_set.rb:101-142", "app/models/results/evaluation_enqueuers/publish_analytics_from_device.rb:15-39"]
 
 not_available:
   # O que a skill deve recusar ou redirecionar, com motivo.

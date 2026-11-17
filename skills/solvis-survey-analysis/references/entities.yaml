@@ -21,7 +21,7 @@ entities:
     attributes: [name, locale, archived, data_quality_enabled, first_evaluation_date, last_evaluation_date, business_context]
     notes:
       - "Nome único por cliente (sem diferenciar maiúsculas)."
-      - "Trava (locked) ao receber a primeira avaliação; depois disso a identidade das perguntas é estável."
+      - "Trava (locked) na primeira avaliação ou antes, quando algo passa a referenciar os ids das perguntas; depois disso a identidade das perguntas é estável."
       - "Não há registro de versão do questionário por avaliação: tudo é lido pelo questionário atual."
 
   - id: question
@@ -31,8 +31,8 @@ entities:
     belongs_to: survey
     attributes: [number, text, answer_type, metric_kind, lgpd_protected, scale_min, scale_max, reference_zone]
     notes:
-      - "number = posição + 1, como aparece para o respondente."
-      - "Texto pode ter sido editado depois da coleta (correções de redação são permitidas com a pesquisa travada)."
+      - "number = posição atual + 1. Se a posição foi alterada depois da coleta, o respondente pode ter visto outro número."
+      - "Com a pesquisa travada ainda é possível editar texto, posição, tipo e opções (inclusive metric_kind e reference_zone). Não presuma que o texto atual é o que o respondente leu."
 
   - id: choice
     label: {pt: "Alternativa", en: "Choice"}
@@ -60,7 +60,7 @@ entities:
 
   - id: evaluation
     label: {pt: "Avaliação", en: "Evaluation"}
-    grain: "a resposta de um respondente a uma pesquisa (completa ou parcial)"
+    grain: "uma sessão de resposta a uma pesquisa (completa ou parcial); a mesma pessoa pode gerar várias"
     key: evaluation_ref
     attributes: [started_at_local, duration_seconds, completed, channel, surveyed_unit_id, shift_id, reliable]
     notes:
@@ -93,7 +93,7 @@ entities:
     key: [evaluation_ref, question_id]
     attributes:
       sentiment: "positive | neutral | negative"
-      tags: "1 a 3 temas"
+      tags: "0 a 3 temas; temas fora da lista do cliente ficam sem id e não viram tag"
       confidence: "0..100"
       summary: "resumo curto (pt-BR)"
       insight: "recomendação curta para o gestor (pt-BR), gerada por LLM"

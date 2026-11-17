@@ -18,14 +18,16 @@ dimensions:
     key: survey_id
     notes:
       - "Métricas de pergunta são sempre de uma pesquisa e uma pergunta. Não há agregação entre pesquisas para NPS/média."
-      - "Pesquisas copiadas ou que receberam transferência de resultados têm ids novos; somar origem e destino de uma transferência conta em dobro."
+      - "Transferência de resultados copia avaliações para a pesquisa de destino e a origem continua com elas: somar as duas conta em dobro."
+      - "Cópia de pesquisa leva só o questionário (ids novos), sem avaliações."
 
   - id: question
     label: {pt: "Pergunta", en: "Question", es: "Pregunta"}
     usage: [filter]
     key: question_id
     notes:
-      - "Identidade estável depois que a pesquisa trava (primeira avaliação). Antes disso, editar o questionário recria ids."
+      - "Identidade estável depois que a pesquisa trava. A trava acontece na primeira avaliação ou antes (início de resposta web, trava manual, filtro ou visualização salva que cite perguntas, campanha de follow-up, destino de transferência). Antes da trava, editar o questionário recria ids."
+      - "Com a pesquisa travada ainda é possível editar texto, posição, tipo e opções da pergunta e texto/valor das alternativas; o histórico é lido com o cadastro atual."
       - "Nunca juntar perguntas pelo texto."
 
   - id: unit
@@ -36,7 +38,7 @@ dimensions:
     semantics: "Unidade onde a avaliação foi coletada (gravada na avaliação). Na web, um efeito de pergunta pode trocar a unidade durante a resposta."
     cardinality: "dezenas a milhares por cliente"
     notes:
-      - "Unidades desabilitadas aparecem quando têm avaliações no período."
+      - "Regra da API (igual ao Data Chat): unidades desabilitadas entram nos recortes quando têm avaliações no período. Nas telas de resultados elas aparecem sempre."
 
   - id: unit_property
     label: {pt: "Propriedade da unidade", en: "Unit property", es: "Propiedad de la unidad"}
@@ -70,7 +72,10 @@ dimensions:
     label: {pt: "Agrupamento temporal", en: "Time bucket", es: "Agrupación temporal"}
     usage: [group_by]
     values: [day, week, month, quarter]
-    semantics: "Semana ISO começando na segunda-feira. Mês e trimestre de calendário."
+    semantics: >
+      Semana ISO começando na segunda-feira (padrão das telas). Mês e trimestre de calendário.
+      Relatórios das telas podem ser configurados com outro dia de início da semana; nesse caso a série
+      semanal da API (sempre segunda) difere da desse relatório.
     notes:
       - "O último balde pode estar incompleto (período em andamento); o envelope marca partial: true."
 
@@ -119,7 +124,9 @@ dimensions:
     key: tag_id
     semantics: >
       Etiqueta aplicada a (avaliação, pergunta), por pessoa ou pelo Radar de Comentários. Hierarquia de um nível
-      exibida como "Pai: Filho". Filtrar pela tag-pai NÃO inclui as subtags. Várias tags no filtro = OU.
+      exibida como "Pai: Filho". Filtrar pela tag-pai NÃO inclui as subtags.
+      Na API, várias tags no filtro = OU, em qualquer pergunta (modo clássico das telas). As telas também têm um
+      modo por pergunta (OU dentro da pergunta, E entre perguntas), que a API não oferece na fase 3.
 
   - id: comment_tone
     label: {pt: "Tom do comentário (Radar)", en: "Comment tone", es: "Tono del comentario"}

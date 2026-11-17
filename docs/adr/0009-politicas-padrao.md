@@ -13,8 +13,8 @@
 | "Hoje" | Data atual em `America/Sao_Paulo`* | Cota do Data Chat usa SP; as telas usam UTC no eixo temporal | O envelope traz as datas efetivas |
 | Amostra pequena | Aviso `small_sample` quando `n < 30`*; não oculta o valor | O sistema não tem mínimo (`minimum_answers = 0`) | Mostra o valor com a ressalva; não ranqueia unidades com aviso sem dizer |
 | Semana | Começa na segunda (ISO) | `periodic_time_axis.rb:16-21` | — |
-| Arredondamento | NPS inteiro (meio para longe do zero); média com casas por amplitude da escala (<10 → 2, <100 → 1, senão 0); percentuais com 1 casa | `utils.rb:10-12`, `question.rb:323-335`, Data Chat | Usa o `display` do envelope, sem rearredondar |
-| Unidades desabilitadas | Entram se tiverem avaliações no período | Data Chat `evaluations_by_unit` | — |
+| Arredondamento | NPS inteiro, com a mesma conta em ponto flutuante das telas (empates exatos podem ir para perto do zero); média com casas por amplitude da escala (<10 → 2, <100 → 1, senão 0); percentuais com 1 casa | `utils.rb:10-12`, `question.rb:323-335`, Data Chat | Usa o `display` do envelope, sem rearredondar |
+| Unidades desabilitadas | Entram se tiverem avaliações no período (nas telas aparecem sempre) | Data Chat `evaluations_by_unit`; telas `results_comparison_utils.rb:259-264` | — |
 | Pesquisas arquivadas | Entram nas consultas; aparecem marcadas em `list_surveys` | API v1 atual inclui arquivadas | Avisa quando a pesquisa está arquivada |
 
 Os valores com * viram configuração por cliente se houver pedido.
