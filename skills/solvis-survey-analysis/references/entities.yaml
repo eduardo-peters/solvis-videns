@@ -1,0 +1,116 @@
+# Modelo semântico Solvis: entidades, grão, chaves e relações
+# Serve para a LLM entender o que cada id significa e quais relações são válidas.
+# A LLM não faz joins: quem cruza dados é a API. Estas regras explicam os resultados e
+# evitam que a LLM cruze por conta própria tabelas vindas de chamadas diferentes.
+
+model_version: "1.0.0-draft"
+
+entities:
+
+  - id: client
+    label: {pt: "Cliente", en: "Client"}
+    grain: "uma empresa contratante"
+    key: client_id
+    notes: ["Toda consulta é de um único cliente, definido pela credencial."]
+
+  - id: survey
+    label: {pt: "Pesquisa", en: "Survey"}
+    grain: "uma pesquisa configurada"
+    key: survey_id
+    belongs_to: client
+    attributes: [name, locale, archived, data_quality_enabled, first_evaluation_date, last_evaluation_date, business_context]
+    notes:
+      - "Nome único por cliente (sem diferenciar maiúsculas)."
+      - "Trava (locked) ao receber a primeira avaliação; depois disso a identidade das perguntas é estável."
+      - "Não há registro de versão do questionário por avaliação: tudo é lido pelo questionário atual."
+
+  - id: question
+    label: {pt: "Pergunta", en: "Question"}
+    grain: "uma pergunta do questionário atual"
+    key: question_id
+    belongs_to: survey
+    attributes: [number, text, answer_type, metric_kind, lgpd_protected, scale_min, scale_max, reference_zone]
+    notes:
+      - "number = posição + 1, como aparece para o respondente."
+      - "Texto pode ter sido editado depois da coleta (correções de redação são permitidas com a pesquisa travada)."
+
+  - id: choice
+    label: {pt: "Alternativa", en: "Choice"}
+    grain: "uma alternativa de uma pergunta"
+    key: choice_id
+    belongs_to: question
+    attributes: [letter, text, value, is_valueless]
+    notes:
+      - "Um choice_id pertence a exatamente uma pergunta."
+      - "value só existe em Scale. Alternativa de escala sem value (ex.: 'Não se aplica') é is_valueless."
+
+  - id: surveyed_unit
+    label: {pt: "Unidade", en: "Unit"}
+    grain: "um ponto de coleta (loja, filial, URL)"
+    key: surveyed_unit_id
+    belongs_to: client
+    attributes: [name, client_specific_identifier, city, state, disabled, timezone, properties, business_context]
+
+  - id: unit_property
+    label: {pt: "Propriedade de unidade", en: "Unit property"}
+    grain: "um par (nome, valor) atribuído a uma unidade"
+    key: [property_name_id, property_value_id]
+    belongs_to: surveyed_unit
+    notes: ["Plano, sem hierarquia, um valor por (unidade, nome). Cadastro atual."]
+
+  - id: evaluation
+    label: {pt: "Avaliação", en: "Evaluation"}
+    grain: "a resposta de um respondente a uma pesquisa (completa ou parcial)"
+    key: evaluation_ref
+    attributes: [started_at_local, duration_seconds, completed, channel, surveyed_unit_id, shift_id, reliable]
+    notes:
+      - "evaluation_ref é a chave global (unique_id). O id interno colide entre partições de dados e nunca é exposto."
+      - "started_at_local é a hora local da unidade."
+      - "reliable: true, false ou null (não processada)."
+
+  - id: answer
+    label: {pt: "Resposta", en: "Answer"}
+    grain: "uma pergunta respondida numa avaliação; em múltipla resposta, uma linha por alternativa marcada"
+    key: [evaluation_ref, question_id, choice_id]
+    belongs_to: evaluation
+
+  - id: tag
+    label: {pt: "Tag", en: "Tag"}
+    grain: "uma etiqueta do cliente"
+    key: tag_id
+    attributes: [display_name, parent_tag_id, description]
+    notes: ["display_name = 'Pai: Filho' quando é subtag. A description é usada pelo Radar para classificar."]
+
+  - id: evaluation_tag
+    label: {pt: "Tag aplicada", en: "Applied tag"}
+    grain: "uma tag aplicada a (avaliação, pergunta)"
+    key: [evaluation_ref, question_id, tag_id]
+    notes: ["Aplicada por pessoa ou pelo Radar (sem usuário). O Radar só acrescenta; reclassificar não remove tags antigas."]
+
+  - id: comment_analysis
+    label: {pt: "Análise do Radar de Comentários", en: "Comment Radar analysis"}
+    grain: "a análise de um comentário (resposta do tipo Text)"
+    key: [evaluation_ref, question_id]
+    attributes:
+      sentiment: "positive | neutral | negative"
+      tags: "1 a 3 temas"
+      confidence: "0..100"
+      summary: "resumo curto (pt-BR)"
+      insight: "recomendação curta para o gestor (pt-BR), gerada por LLM"
+      gut: "só em negativos: severity, urgency, tendency (1..5) e score = S×U×T (1..125)"
+    notes:
+      - "summary e insight são texto gerado por modelo, não fato. Citar como 'o Radar sugere'."
+      - "Comentário ainda não analisado não tem análise."
+
+  - id: shift
+    label: {pt: "Turno", en: "Shift"}
+    grain: "um turno cadastrado"
+    key: shift_id
+    notes: ["0 = sem turno."]
+
+relationship_rules:
+  - "evaluation → surveyed_unit é a unidade NO MOMENTO da coleta. unit_property e unit_state são do cadastro atual."
+  - "answer → choice só é válido se choice.question_id = answer.question_id."
+  - "Ids de cadastro (pesquisa, pergunta, alternativa, unidade, tag) são globais no sistema, mas a API só aceita os do escopo da credencial."
+  - "Resultados de chamadas diferentes não podem ser cruzados pela LLM linha a linha. Se a análise precisa do cruzamento, peça uma consulta com group_by."
+  - "Não existe relação entre pesquisas diferentes, nem entre uma pesquisa e sua cópia."

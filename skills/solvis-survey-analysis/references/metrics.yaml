@@ -1,0 +1,256 @@
+# Modelo semântico Solvis: métricas
+# Snapshot da skill. Fonte canônica: GET /api/analytics/v1/model (ver docs/adr/0002).
+# Toda métrica é calculada pelo servidor. Este arquivo explica o que cada uma significa;
+# ele NÃO autoriza a LLM a calcular nada.
+
+model_version: "1.0.0-draft"
+derived_from: "survey_system@f594c4a6 (2026-11-17)"
+
+conventions:
+  n: >
+    Tamanho da amostra da linha. Cada métrica define o que conta em n.
+    Sempre citar n junto do valor.
+  pooling: >
+    Agregar grupos (rede, propriedade de unidade, "todas as unidades") é sempre
+    somar as contagens e recalcular. Nunca fazer média dos valores das linhas.
+    O servidor entrega esse agregado em `totals`.
+  current_questionnaire: >
+    Textos de pergunta/alternativa e valores numéricos das alternativas vêm do
+    cadastro ATUAL da pesquisa. Editar o valor de uma alternativa muda o histórico.
+  rounding: >
+    Usar o campo `display` do envelope. Não rearredondar.
+
+metrics:
+
+  - id: evaluation_count
+    label: {pt: "Avaliações", en: "Evaluations", es: "Evaluaciones"}
+    status: available
+    grain: evaluation
+    question_required: false
+    definition: >
+      Número de avaliações (uma por respondente por pesquisa) cujo started_at cai no período.
+    n: "igual ao valor"
+    includes:
+      - avaliações incompletas (completed = false), salvo filtro completion=completed_only
+      - avaliações de totem e web
+      - avaliações não tratadas pelo Data Quality (reliable NULL), salvo política reliable_only
+    excludes:
+      - avaliações removidas (remoção física; não há lixeira)
+    null_when: "nunca; sem dados = 0"
+    aggregation: additive
+    display: integer
+    pitfalls:
+      - "Avaliações ≠ respostas. Uma avaliação tem várias respostas; para 'quantos responderam a pergunta X' use response_count."
+      - "Não é taxa de resposta: o sistema não tem o número de convidados/visitantes."
+    app_refs: ["app/models/results/evaluation_counts/consolidated_count.rb:12-16", "data_chat/catalog/evaluation_volume.rb"]
+
+  - id: response_count
+    label: {pt: "Respostas à pergunta", en: "Responses to question", es: "Respuestas a la pregunta"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["NPS", "Scale", "Multiple Choice", "Multiple Response", "Text", "Short Text", "Numeric", "Email", "Phone", "Date", "CPF", "CNPJ"]
+    definition: >
+      Quantas avaliações têm resposta para a pergunta no período.
+    by_type:
+      NPS: "respostas com score 0..10"
+      Scale: "respostas a qualquer alternativa, inclusive as sem valor (ex.: 'Não se aplica')"
+      Multiple Choice: "respostas a qualquer alternativa"
+      Multiple Response: "avaliações distintas com alguma linha na pergunta, inclusive quem deixou em branco quando permitido"
+      Text/Short Text/demais abertas: "respostas com texto não vazio"
+    null_when: "nunca; sem dados = 0"
+    aggregation: additive
+    display: integer
+    pitfalls:
+      - "Avaliações incompletas contam até a pergunta em que o respondente parou; o n cai ao longo do questionário."
+      - "Perguntas puladas por desvio (branching) não geram resposta."
+
+  - id: nps
+    label: {pt: "NPS", en: "NPS", es: "NPS"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["NPS"]
+    definition: >
+      Net Promoter Score de uma pergunta do tipo NPS: % de promotores menos % de detratores, de -100 a 100.
+    groups:
+      promoters: {scores: [9, 10], pt: "Promotores"}
+      passives: {scores: [7, 8], pt: "Neutros"}
+      detractors: {scores: [0, 1, 2, 3, 4, 5, 6], pt: "Detratores"}
+    formula: "round(100 × (promoters/n − detractors/n)), arredondamento meio-para-longe-do-zero"
+    n: "respostas da pergunta com score 0..10"
+    breakdown_fields: [promoters, passives, detractors, promoters_pct, passives_pct, detractors_pct]
+    null_when: "n = 0 (a API devolve null; as telas mostram 0)"
+    aggregation: "pooled: somar promoters, detractors e n de todas as linhas e recalcular"
+    display: "inteiro, sem casas, sem símbolo de %"
+    comparison_delta: "pontos de NPS (atual − comparado)"
+    reference_zones:
+      note: "Só quando a pergunta tem reference_zone diferente de 'none'. Faixas sobre o NPS inteiro."
+      default: {critical: "-100..0", improvement: "1..50", quality: "51..75", excellence: "76..100"}
+      with_enchantment: {critical: "-100..0", improvement: "1..50", quality: "51..75", excellence: "76..90", enchantment: "91..100"}
+      labels_pt: {critical: "Zona Crítica", improvement: "Zona de Aperfeiçoamento", quality: "Zona de Qualidade", excellence: "Zona de Excelência", enchantment: "Zona de Encantamento"}
+    pitfalls:
+      - "Nunca calcular NPS de grupo pela média dos NPS das unidades ou dos meses."
+      - "Uma pesquisa pode ter mais de uma pergunta NPS. São métricas separadas; não juntar."
+      - "Explicar variação pelas porcentagens (promoters_pct, detractors_pct), não pelas contagens."
+      - "Não comparar com 'NPS de mercado': a base não tem esse dado."
+    app_refs: ["app/models/results/nps_customer_type.rb:6-15", "app/models/results/answer_counts/count_base.rb:86-90", "app/models/results/answer_counts/utils.rb:5-12", "data_chat/catalog/nps_measures.rb:28-40", "app/helpers/results/reference_zone_helper.rb:18-30"]
+
+  - id: scale_mean
+    label: {pt: "Média da escala", en: "Scale average", es: "Promedio de la escala"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["Scale"]
+    excludes_questions_with: {metric_kind: "weighted_sum"}
+    definition: >
+      Média dos valores numéricos das alternativas escolhidas numa pergunta de escala.
+    formula: "Σ(contagem da alternativa × valor) / Σ(contagem), só alternativas com valor"
+    n: "respostas a alternativas COM valor (exclui 'Não se aplica' e outras sem valor)"
+    breakdown_fields: [scale_min, scale_max]
+    null_when: "n = 0"
+    aggregation: "pooled: somar Σ(contagem × valor) e Σ(contagem) e dividir"
+    display: "casas pela amplitude da escala: < 10 → 2 casas; < 100 → 1; ≥ 100 → 0. Escala 0..100 exibida com %"
+    comparison_delta: "diferença na unidade da escala"
+    pitfalls:
+      - "Sempre dizer a escala junto (ex.: 4,3 numa escala de 1 a 5)."
+      - "Não comparar médias de perguntas com escalas diferentes."
+      - "O valor da alternativa é o do cadastro atual."
+      - "Perguntas weighted_sum não entram: use weighted_sum."
+    app_refs: ["app/models/results/answer_counts/count_base.rb:131-147", "app/models/question.rb:232-234,298-335", "data_chat/catalog/question_scores.rb"]
+
+  - id: weighted_sum
+    label: {pt: "Soma ponderada", en: "Weighted sum", es: "Suma ponderada"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["Scale"]
+    only_questions_with: {metric_kind: "weighted_sum"}
+    definition: >
+      Indicador das perguntas de escala configuradas como soma ponderada. Equivale a 100 × média.
+      Com valores 0 e 1 nas alternativas, lê-se como "% de respostas na alternativa de valor 1".
+    formula: "round(Σ(100 × contagem/n × valor))  ≡  round(100 × média)"
+    n: "respostas a alternativas com valor"
+    null_when: "n = 0 (as telas mostram 0)"
+    aggregation: "pooled"
+    display: "inteiro; com valores entre 0 e 1 exibido com %"
+    pitfalls:
+      - "Não é média. Não misturar com scale_mean na mesma comparação."
+    app_refs: ["app/models/results/answer_counts/count_base.rb:153-167"]
+
+  - id: choice_share
+    label: {pt: "Distribuição das alternativas", en: "Choice distribution", es: "Distribución de alternativas"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["Multiple Choice", "Scale"]
+    definition: >
+      Parte das respostas da pergunta que escolheu cada alternativa.
+    formula: "chosen / answered"
+    n: "answered = todas as respostas da pergunta, inclusive alternativas sem valor"
+    breakdown_fields: [choice_id, choice_text, chosen, answered, share_pct]
+    null_when: "answered = 0"
+    aggregation: "pooled: somar chosen e answered"
+    display: "percentual com 1 casa"
+    sums_to: "100% entre as alternativas de uma pergunta"
+    pitfalls:
+      - "Em escala, 'Não se aplica' entra no denominador aqui, mas não entra na média."
+      - "Alternativa com campo adicional ('Outro: ___') conta como a própria alternativa; o texto vai para comentários."
+    app_refs: ["app/models/results/answer_counts/count_base.rb:44-62", "data_chat/catalog/choice_measures.rb"]
+
+  - id: multi_response_share
+    label: {pt: "Distribuição de múltipla resposta", en: "Multiple-response distribution", es: "Distribución de respuesta múltiple"}
+    status: available
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["Multiple Response"]
+    definition: >
+      Parte das avaliações que marcou cada alternativa numa pergunta de múltipla resposta.
+    formula: "avaliações que marcaram a alternativa / avaliações distintas com linha na pergunta"
+    n: "avaliações distintas com alguma linha na pergunta, inclusive quem deixou em branco"
+    breakdown_fields: [choice_id, choice_text, chosen, answered, share_pct]
+    null_when: "answered = 0"
+    aggregation: "pooled"
+    display: "percentual com 1 casa"
+    sums_to: "pode passar de 100%"
+    pitfalls:
+      - "Nunca somar as porcentagens nem dizer que somam 100%."
+    app_refs: ["app/models/results/answer_counts/consolidated_count.rb:43-51", "data_chat/narrator_rules.rb:38-42"]
+
+  - id: choice_set_share
+    label: {pt: "Parte num conjunto de alternativas", en: "Choice-set share", es: "Parte en un conjunto de alternativas"}
+    status: proposed
+    phase: 3
+    grain: answer
+    question_required: true
+    applies_to_answer_types: ["Multiple Choice", "Scale"]
+    definition: >
+      Parte das respostas cujas alternativas estão num conjunto informado (ex.: as duas melhores da escala).
+      Serve para indicadores que o cliente chama de "top-2-box" ou "% satisfeitos" sem que a LLM some porcentagens.
+    formula: "Σ chosen(alternativas do conjunto) / answered"
+    n: "igual a choice_share"
+    null_when: "answered = 0"
+    aggregation: "pooled"
+    display: "percentual com 1 casa"
+    pitfalls:
+      - "O nome que o cliente dá ('CSAT', 'satisfação') é rótulo dele; a skill declara quais alternativas formam o conjunto."
+
+  - id: theme_mentions
+    label: {pt: "Temas dos comentários", en: "Comment themes", es: "Temas de los comentarios"}
+    status: available
+    grain: answer
+    question_required: false
+    applies_to_answer_types: ["Text"]
+    requires: "Radar de Comentários ativo na pesquisa"
+    definition: >
+      Quantos comentários analisados pelo Radar citam cada tema (tag do cliente), e que parte dos analisados isso representa.
+    formula: "mentions / analysed_comments (ou / tone_comments quando filtrado por tom)"
+    n: "analysed_comments = comentários do período com análise do Radar"
+    breakdown_fields: [tag_id, theme, mentions, mention_pct, analysed_comments, period_comments, tone_comments]
+    null_when: "analysed_comments = 0"
+    aggregation: "pooled"
+    display: "percentual com 1 casa"
+    sums_to: "pode passar de 100% (até 3 temas por comentário)"
+    pitfalls:
+      - "Se analysed_comments < period_comments, o Radar cobriu só parte dos comentários: dizer isso."
+      - "Só comentários de perguntas do tipo Text com 2 palavras ou mais são analisados. Short Text não é."
+      - "Tom (tone) é o tom do texto lido pelo Radar; não é a nota de quem escreveu."
+      - "Temas são o que os respondentes disseram, não causa provada."
+      - "A linha 'nenhum tema citado' (tag_id 0) é real e deve ser lida como tal."
+    app_refs: ["data_chat/catalog/comment_themes.rb", "data_chat/catalog/theme_measures.rb", "app/domain/services/comment_radar/classifier.rb"]
+
+  - id: data_quality_summary
+    label: {pt: "Qualidade de dados", en: "Data quality", es: "Calidad de datos"}
+    status: available
+    grain: evaluation
+    question_required: false
+    requires: "escopo analytics:reliability; pesquisa com Data Quality ligado"
+    definition: >
+      Contagem de avaliações confiáveis, não confiáveis e não classificadas no período; opcionalmente, quantas falharam em cada regra.
+    breakdown_fields: [evaluation_count, reliable_count, unreliable_count, unclassified_count, rule_failures]
+    null_when: "nunca"
+    aggregation: additive
+    display: integer
+    pitfalls:
+      - "Não classificada (reliable NULL) não significa confiável. Avaliações web costumam ficar não classificadas."
+      - "Uma regra violada sozinha pode não derrubar a avaliação: a estratégia padrão soma pesos e reprova a partir de 1,0."
+    app_refs: ["data_chat/catalog/data_quality_summary.rb", "app/domain/services/data_quality/rule_set.rb:101-142"]
+
+not_available:
+  # O que a skill deve recusar ou redirecionar, com motivo.
+  - id: csat
+    reason: "O sistema não tem métrica CSAT. Se o cliente chama uma pergunta de escala de CSAT, usar scale_mean, weighted_sum ou choice_set_share dessa pergunta e declarar o mapeamento."
+  - id: ces
+    reason: "Não há métrica de esforço. Mesmo tratamento do CSAT, se houver pergunta de escala correspondente."
+  - id: response_rate
+    reason: "Não há denominador (convidados, visitantes, tickets enviados) na API."
+  - id: abandonment_rate
+    reason: "Não há métrica de abandono. Pode-se informar evaluation_count por completion (completas × incompletas), sem chamar de taxa de abandono."
+  - id: numeric_mean
+    reason: "Perguntas do tipo Numeric não têm agregação no sistema; o valor é texto livre com vírgula ou ponto."
+  - id: legacy_sentiment_score
+    reason: "A tabela de sentimentos legada (API v2) não é usada nas telas. Usar o tom do Radar (dimension comment_tone)."
+  - id: market_benchmark
+    reason: "A base não tem dados de mercado ou de outros clientes."
+  - id: forecast
+    reason: "A skill não projeta tendência nem prevê valores futuros."

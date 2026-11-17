@@ -1,0 +1,161 @@
+# Modelo semântico Solvis: dimensões (recortes e filtros)
+# Snapshot da skill. Fonte canônica: GET /api/analytics/v1/model.
+# group_by = abrir linhas por esta dimensão. filter = restringir o conjunto.
+
+model_version: "1.0.0-draft"
+
+time_basis: >
+  Todas as dimensões de tempo usam started_at, que é a HORA LOCAL DA UNIDADE no início da avaliação,
+  gravada sem fuso. Não converter de/para UTC. Um período "1 a 31 de outubro" significa os dias
+  de calendário locais de cada unidade, inclusivos. created_at (recebimento no servidor, UTC) não é
+  usado em análise.
+
+dimensions:
+
+  - id: survey
+    label: {pt: "Pesquisa", en: "Survey", es: "Encuesta"}
+    usage: [filter]
+    key: survey_id
+    notes:
+      - "Métricas de pergunta são sempre de uma pesquisa e uma pergunta. Não há agregação entre pesquisas para NPS/média."
+      - "Pesquisas copiadas ou que receberam transferência de resultados têm ids novos; somar origem e destino de uma transferência conta em dobro."
+
+  - id: question
+    label: {pt: "Pergunta", en: "Question", es: "Pregunta"}
+    usage: [filter]
+    key: question_id
+    notes:
+      - "Identidade estável depois que a pesquisa trava (primeira avaliação). Antes disso, editar o questionário recria ids."
+      - "Nunca juntar perguntas pelo texto."
+
+  - id: unit
+    label: {pt: "Unidade", en: "Unit", es: "Unidad"}
+    synonyms_pt: [loja, filial, ponto, agência, restaurante, praça, unidade pesquisada, ponto de atendimento]
+    usage: [filter, group_by]
+    key: surveyed_unit_id
+    semantics: "Unidade onde a avaliação foi coletada (gravada na avaliação). Na web, um efeito de pergunta pode trocar a unidade durante a resposta."
+    cardinality: "dezenas a milhares por cliente"
+    notes:
+      - "Unidades desabilitadas aparecem quando têm avaliações no período."
+
+  - id: unit_property
+    label: {pt: "Propriedade da unidade", en: "Unit property", es: "Propiedad de la unidad"}
+    examples_pt: [regional, bandeira, formato, região, gerente]
+    usage: [filter, group_by]
+    key: "property_name_id + property_value_id"
+    semantics: >
+      Atributo nome→valor cadastrado na unidade. Plano (sem hierarquia), um valor por unidade e nome.
+      Resolvido pelo cadastro ATUAL: se uma loja mudou de regional, todo o histórico dela vai para a regional nova.
+    aggregation: "a métrica da propriedade é o agregado (pooled) das unidades que hoje têm o valor"
+    notes:
+      - "Dois filtros do mesmo nome de propriedade fazem interseção."
+
+  - id: unit_state
+    label: {pt: "UF da unidade", en: "Unit state", es: "Estado de la unidad"}
+    status: proposed
+    usage: [filter, group_by]
+    semantics: "UF do cadastro atual. Códigos especiais: FB = exterior, IT = itinerante, WB = web sem estado."
+
+  - id: period
+    label: {pt: "Período", en: "Period", es: "Período"}
+    usage: [filter]
+    semantics: "Intervalo inclusivo de datas locais. Aceita datas ISO ou presets; o envelope devolve as datas efetivas."
+    presets: [last_7_days, last_30_days, last_90_days, this_month, last_month, this_quarter, last_quarter, this_year, last_year, "month:AAAA-MM", "quarter:AAAA-Qn", "year:AAAA"]
+    comparison: [previous_period, previous_year]
+    notes:
+      - "previous_period = mesma duração, terminando no dia anterior ao início."
+      - "previous_year = mesmas datas um ano antes. Para períodos maiores que um ano, a API troca por previous_period e avisa."
+
+  - id: time_bucket
+    label: {pt: "Agrupamento temporal", en: "Time bucket", es: "Agrupación temporal"}
+    usage: [group_by]
+    values: [day, week, month, quarter]
+    semantics: "Semana ISO começando na segunda-feira. Mês e trimestre de calendário."
+    notes:
+      - "O último balde pode estar incompleto (período em andamento); o envelope marca partial: true."
+
+  - id: day_of_week
+    label: {pt: "Dia da semana", en: "Day of week", es: "Día de la semana"}
+    usage: [filter, group_by]
+    values: [mon, tue, wed, thu, fri, sat, sun]
+    semantics: "Dia local da unidade em started_at."
+
+  - id: hour_block
+    label: {pt: "Faixa de horário", en: "Hour block", es: "Franja horaria"}
+    usage: [filter, group_by]
+    block_sizes_hours: [1, 2, 3, 4, 6, 8, 12]
+    default_block: 6
+    semantics: "Hora local de started_at. Filtro de horário é [início, fim), com fim 00:00 = 24:00."
+
+  - id: shift
+    label: {pt: "Turno", en: "Shift", es: "Turno"}
+    usage: [filter, group_by]
+    key: shift_id
+    semantics: >
+      Turno carimbado na avaliação no momento da ingestão, pelos horários de turno da unidade.
+      Mudar o cadastro de turnos não reclassifica o passado. Sem turno = shift_id 0 ("sem turno").
+
+  - id: channel
+    label: {pt: "Canal", en: "Channel", es: "Canal"}
+    usage: [filter, group_by]
+    values: {device: "Totem/tablet", web: "Pesquisa web (link, QR code)"}
+
+  - id: completion
+    label: {pt: "Completude", en: "Completion", es: "Completitud"}
+    usage: [filter, group_by]
+    values: {completed: "Respondeu até o fim", incomplete: "Parou no meio (timeout ou desistência)"}
+    default_filter: all
+
+  - id: reliability
+    label: {pt: "Confiabilidade", en: "Reliability", es: "Confiabilidad"}
+    usage: [filter, group_by]
+    requires: "analytics:reliability para ver unreliable e unclassified"
+    values: {reliable: "Aprovada pelo Data Quality", unreliable: "Reprovada", unclassified: "Não processada (NULL)"}
+    default_policy: "ver ADR-0009"
+
+  - id: tag
+    label: {pt: "Tag", en: "Tag", es: "Etiqueta"}
+    usage: [filter]
+    key: tag_id
+    semantics: >
+      Etiqueta aplicada a (avaliação, pergunta), por pessoa ou pelo Radar de Comentários. Hierarquia de um nível
+      exibida como "Pai: Filho". Filtrar pela tag-pai NÃO inclui as subtags. Várias tags no filtro = OU.
+
+  - id: comment_tone
+    label: {pt: "Tom do comentário (Radar)", en: "Comment tone", es: "Tono del comentario"}
+    usage: [filter]
+    values: {positive: "positivo", neutral: "neutro", negative: "negativo"}
+    semantics: "Tom do texto lido pelo Radar. Para métricas de avaliação, filtra avaliações com ao menos um comentário naquele tom."
+
+  - id: author_nps_group
+    label: {pt: "Grupo NPS de quem respondeu", en: "Respondent NPS group", es: "Grupo NPS del encuestado"}
+    usage: [filter, group_by]
+    values: {promoter: "9-10", passive: "7-8", detractor: "0-6"}
+    semantics: "Grupo do respondente numa pergunta NPS de referência da mesma avaliação. Diferente do tom do texto."
+    requires_param: reference_question_id
+
+  - id: reference_choice
+    label: {pt: "Alternativa escolhida numa pergunta de referência", en: "Reference-question choice", es: "Alternativa en pregunta de referencia"}
+    usage: [group_by]
+    status: proposed
+    phase: 3
+    requires_param: reference_question_id
+    semantics: "Abre a métrica pela alternativa que a mesma avaliação marcou noutra pergunta."
+    notes:
+      - "Se a referência for de múltipla resposta, uma avaliação entra em várias categorias; as categorias não somam o total."
+
+# Combinações que a API aceita em cada fase. A API recusa o resto com 422 `unsupported_combination`.
+compatibility:
+  phase_1:
+    evaluation_count: {group_by: [unit, time_bucket, channel, completion], filters: [survey, unit, period, channel, completion, reliability]}
+    response_count: {group_by: [unit, time_bucket], filters: [survey, question, unit, period, channel, completion, reliability]}
+    nps: {group_by: [unit, time_bucket, unit_property], filters: [survey, question, unit, unit_property, period, channel, completion, reliability]}
+    scale_mean: {group_by: [unit, time_bucket, unit_property], filters: [survey, question, unit, unit_property, period, channel, completion, reliability]}
+    weighted_sum: {group_by: [unit, time_bucket, unit_property], filters: [survey, question, unit, unit_property, period, channel, completion, reliability]}
+    choice_share: {group_by: [unit], filters: [survey, question, unit, period, channel, completion, reliability]}
+    multi_response_share: {group_by: [unit], filters: [survey, question, unit, period, channel, completion, reliability]}
+  phase_3_additions:
+    all_question_metrics: {group_by: [day_of_week, hour_block, shift, author_nps_group, reference_choice, unit_state], filters: [tag, comment_tone, day_of_week, hour_block, shift]}
+    theme_mentions: {group_by: [unit, time_bucket], filters: [survey, unit, period, comment_tone, author_nps_group]}
+    choice_set_share: {group_by: [unit, time_bucket, unit_property], filters: [survey, question, unit, period]}
+    data_quality_summary: {group_by: [unit, time_bucket], filters: [survey, unit, period]}

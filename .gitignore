@@ -1,0 +1,9 @@
+dist/
+.venv/
+node_modules/
+__pycache__/
+.env
+*.local.*
+# relatórios internos e dados de cliente nunca entram neste repositório
+pesquisa/
+*ACHADOS*
