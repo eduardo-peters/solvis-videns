@@ -28,4 +28,4 @@ O sistema tem 12 tipos (`answer_type`). O tipo decide quais métricas existem pa
 
 O n de uma pergunta costuma ser menor que o da anterior: incompletas param no meio e desvios fazem só parte dos respondentes chegar a certas perguntas. Diga isso quando o n cair muito.
 
-Pesquisas grandes costumam repetir blocos de perguntas para públicos diferentes (mesmo texto em posições diferentes). Cada pergunta é uma métrica separada; nunca some as gêmeas.
+Pesquisas grandes costumam repetir blocos de perguntas para públicos diferentes (mesmo texto em posições diferentes). Cada pergunta é uma métrica separada; nunca some as gêmeas. Para saber a quem cada uma se destina, leia `flow` em `questionnaire` (regras de entrada e ramificações) e diga isso ao usuário: o `n` de uma pergunta `shown_to: conditional` é de quem a viu.

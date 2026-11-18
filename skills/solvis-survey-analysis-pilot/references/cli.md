@@ -13,7 +13,7 @@ Listas aceitam vírgula ou repetição: `--group-by unit,month` ou `--group-by u
 | `scope` | Resumo da credencial: pesquisas ativas nos últimos 90 dias (até 15), total de pesquisas, unidades, UFs, propriedades de unidade e capacidades desta versão |
 | `config [--start-month AAAA-MM]` | Mostra ou define o primeiro mês que o usuário quer analisar. Sem ele, `query`, `comments` e `sync` recusam (`start_month_required`); nada antes dele é baixado. `scope` também mostra `start_month` |
 | `surveys [--search T] [--active-in PRESET] [--include-archived] [--limit N]` | Lista ou busca pesquisas, mais recentes primeiro. `--active-in last_90_days` mostra só as que têm avaliação no período (pela data da última avaliação; arquivadas só com `--include-archived`) |
-| `questionnaire --survey ID` | Perguntas (id, número, texto, tipo, `metric` recomendada, `metric_kind`, escala, LGPD, zona de referência, alternativas com id/letra/valor). Campos opcionais só aparecem quando definidos: sem `metric_kind`, a escala é de média |
+| `questionnaire --survey ID` | Perguntas (id, número, texto, tipo, `metric` recomendada, `metric_kind`, escala, LGPD, zona de referência, alternativas com id/letra/valor, e `flow` com regras de entrada, perguntas puladas por ramificação e ramificações que saem da pergunta; `shown_to: conditional` marca quem não aparece para todos). Campos opcionais só aparecem quando definidos: sem `metric_kind`, a escala é de média |
 | `units [--search T] [--properties]` | Unidades com cidade, UF e propriedades; `--properties` lista nomes e valores de propriedade com ids |
 | `resolve --kind K --text T [--survey ID] [--question ID]` | Texto → candidatos com id e tipo de casamento (`exact`, `prefix`, `word`, `contains`). K: `survey`, `question` (aceita "pergunta 3"), `choice` (aceita a letra), `unit`, `property`, `property_value`, `tag`. `exact_match` só é verdadeiro com um único casamento exato |
 | `query ...` | Calcula uma métrica e devolve o envelope (abaixo) |
@@ -102,6 +102,8 @@ query --metric nps --survey 56 --question 812 --period last_month \
 
 Distribuições (`choice_share`, `multi_response_share`, `tag_mentions`) têm uma linha por alternativa ou tag (`dims.choice` ou `dims.tag`, mais `chosen` ou `mentions`). Em `choice_share` e `multi_response_share`, `totals` é uma lista com uma entrada por alternativa. Em `tag_mentions`, `totals` é um objeto com `tagged_comments`, `text_responses`, `tagged_share_display` (parte dos comentários que tem tag), `rows` e, com comparação, `compared`.
 
+Em pergunta condicional (`shown_to: conditional`), o envelope traz também `exposure`: `totals` e, com `--group-by`, `rows`, cada um com `evaluations` (no recorte), `reached` (viram a pergunta, inferido das regras e das respostas), `answered`, `reached_of_evaluations_display`, `answered_of_reached_display` e `uncertain_evaluations` (avaliações cujo caminho depende de resposta de pergunta de texto repetido sem dono). `assumptions` lista as premissas da inferência. Não aparece em pergunta exibida a todos nem em `tag_mentions`.
+
 ## Avisos
 
 | Código | O que fazer |
@@ -116,6 +118,7 @@ Distribuições (`choice_share`, `multi_response_share`, `tag_mentions`) têm um
 | `multi_response_sum_exceeds_100` | As porcentagens não somam 100% |
 | `overlapping_categories` | O recorte é uma pergunta de múltipla resposta; as linhas não somam o total |
 | `values_from_current_questionnaire` | O questionário foi editado depois de travado; textos e valores atuais valem para todo o histórico |
+| `conditional_question` | A pergunta tem regra de entrada ou pode ser pulada por ramificação; só parte das avaliações a viu. Diga a condição (`flow` no aviso) e que o n é de quem a viu. O envelope traz `exposure` |
 | `answers_excluded` | Respostas apontam para alternativas que não existem mais; ficaram fora, como nas telas |
 | `answers_assigned_by_order` | A pergunta tem texto repetido; as respostas foram separadas pela ordem. Pode citar o número; mencione a ressalva se o usuário for comparar perguntas gêmeas |
 | `includes_unverified_evaluations` | Pesquisa com Data Quality, política `all` e avaliações reprovadas ou não verificadas no período: dizer quantas entram |

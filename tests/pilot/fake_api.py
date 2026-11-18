@@ -80,7 +80,7 @@ class FakeSolvis:
                  "translations": {}}
                 for i, c in enumerate(q.get("choices", []))
             ],
-            "branching_rules": [], "entry_rules": [],
+            "branching_rules": q.get("branching_rules", []), "entry_rules": q.get("entry_rules", []),
         }
 
     def survey_json(self, s):

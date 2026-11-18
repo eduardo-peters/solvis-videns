@@ -61,6 +61,43 @@ def _decimal(raw: Any) -> Optional[Decimal]:
         return None
 
 
+def _conditions(raw: Any) -> Dict[str, Any]:
+    """Condições de uma regra: hash (ou JSON em texto) → dict; qualquer outra coisa → vazio."""
+    if isinstance(raw, str) and raw.strip():
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _int_or_none(raw: Any) -> Optional[int]:
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+@dataclass
+class BranchingRule:
+    """Regra de ramificação de uma pergunta: ao responder como `conditions`, segue para `next_position` (-1 = fim)."""
+    choice_id: Optional[int]
+    conditions: Dict[str, Any]
+    next_position: int
+    priority: int
+
+    @property
+    def is_default(self) -> bool:
+        return self.choice_id is None and not self.conditions
+
+
+@dataclass
+class EntryRule:
+    """Regra de entrada: a pergunta só aparece se TODOS os termos valem (pergunta → condição).
+    Com mais de uma regra, basta uma valer."""
+    terms: Dict[int, Dict[str, Any]]
+
+
 @dataclass
 class Choice:
     id: int
@@ -86,6 +123,8 @@ class Question:
     answer_type: str
     options: Dict[str, Any]
     choices: List[Choice] = field(default_factory=list)
+    branching_rules: List[BranchingRule] = field(default_factory=list)
+    entry_rules: List[EntryRule] = field(default_factory=list)
 
     @property
     def number(self) -> int:
@@ -228,6 +267,21 @@ class Questionnaire:
                     answer_type=rq.get("answer_type") or "",
                     options=_options(rq.get("options")),
                     choices=choices,
+                    branching_rules=[
+                        BranchingRule(
+                            choice_id=_int_or_none(br.get("choice_id")),
+                            conditions=_conditions(br.get("conditions")),
+                            next_position=_int_or_none(br.get("next_question_position")),
+                            priority=_int_or_none(br.get("priority_level")) or 0,
+                        )
+                        for br in rq.get("branching_rules") or []
+                        if _int_or_none(br.get("next_question_position")) is not None
+                    ],
+                    entry_rules=[
+                        EntryRule({int(k): _conditions(v) for k, v in _conditions(er.get("conditions")).items()
+                                   if _int_or_none(k) is not None})
+                        for er in rq.get("entry_rules") or []
+                    ],
                 )
             )
         questions.sort(key=lambda q: q.position)
@@ -259,7 +313,92 @@ class Questionnaire:
     def nps_questions(self) -> List[Question]:
         return [q for q in self.questions if q.answer_type == "NPS"]
 
+    # ------------------------------------------------------------ fluxo da pesquisa
+    def _number_of(self, position: int) -> Any:
+        """Número da pergunta que está na posição, ou 'fim' (posição -1 ou sem pergunta)."""
+        target = next((q for q in self.questions if q.position == position), None)
+        return target.number if target else "fim"
+
+    def describe_condition(self, source: Question, cond: Dict[str, Any], choice_id: Optional[int] = None) -> str:
+        """Condição sobre a resposta de `source`, em português (ex.: escolheu "Sim")."""
+        parts: List[str] = []
+        cid = choice_id if choice_id is not None else _int_or_none(cond.get("choice_id"))
+        if cid is not None:
+            choice = next((c for c in source.choices if c.id == cid), None)
+            verb = "marcou" if source.answer_type == "Multiple Response" else "escolheu"
+            parts.append(f'{verb} "{choice.label}"' if choice else f"{verb} uma alternativa que já não existe")
+        if cond.get("customer_type"):
+            parts.append({"promoters": "deu nota de promotor (9 e 10)", "passives": "deu nota de neutro (7 e 8)",
+                          "detractors": "deu nota de detrator (0 a 6)"}.get(str(cond["customer_type"]), "deu nota de um grupo NPS"))
+        if cond.get("skipped") is True:
+            parts.append("pulou a pergunta")
+        elif cond.get("skipped") is False:
+            parts.append("respondeu a pergunta")
+        if cond.get("full_match_regexp"):
+            parts.append("respondeu um texto que casa com a expressão")
+        return " ou ".join(parts) or "condição não identificada"
+
+    def describe_entry_rule(self, rule: EntryRule) -> Dict[str, Any]:
+        texts: List[str] = []
+        for qid, cond in rule.terms.items():
+            src = self.by_id.get(qid)
+            texts.append(f"na pergunta {src.number} {self.describe_condition(src, cond)}" if src
+                         else "em uma pergunta que já não existe")
+        return {
+            "requires": " e ".join(texts) or "condição não identificada",
+            "depends_on_questions": sorted(self.by_id[k].number for k in rule.terms if k in self.by_id),
+        }
+
+    def bypassed_by(self, q: Question) -> List[Dict[str, Any]]:
+        """Regras de perguntas anteriores que pulam `q` (o destino fica depois dela, ou é o fim)."""
+        out: List[Dict[str, Any]] = []
+        for p in self.questions:
+            if p.position >= q.position:
+                continue
+            for br in p.branching_rules:
+                if self._number_of(br.next_position) == "fim" or br.next_position > q.position:
+                    out.append({
+                        "question": p.number,
+                        "when": "sempre" if br.is_default else self.describe_condition(p, br.conditions, br.choice_id),
+                        "goes_to": self._number_of(br.next_position),
+                    })
+        return out
+
+    def flow(self, q: Question) -> Optional[Dict[str, Any]]:
+        """Quem pode ver a pergunta. None = não há regra que restrinja (todos que chegam a ela)."""
+        entry = [self.describe_entry_rule(r) for r in q.entry_rules]
+        bypass = self.bypassed_by(q)
+        if not entry and not bypass:
+            return None
+        body: Dict[str, Any] = {}
+        if entry:
+            body["entry_rules"] = entry  # com mais de uma regra, basta uma valer
+        if bypass:
+            body["skipped_by_branching"] = bypass
+        return body
+
+    def flow_summary(self, q: Question) -> Dict[str, Any]:
+        """`flow` + as ramificações que saem da pergunta."""
+        body = self.flow(q) or {}
+        if q.branching_rules:
+            body["branches"] = [
+                {"when": "sempre" if br.is_default else self.describe_condition(q, br.conditions, br.choice_id),
+                 "goes_to": self._number_of(br.next_position)}
+                for br in q.branching_rules
+            ]
+        return body
+
     def summary(self) -> Dict[str, Any]:
+        has_flow = any(q.entry_rules or q.branching_rules for q in self.questions)
+        questions = []
+        for q in self.questions:
+            body = q.summary(ambiguous=q.id in self.ambiguous_ids)
+            flow = self.flow_summary(q)
+            if flow:
+                body["flow"] = flow
+                if "entry_rules" in flow or "skipped_by_branching" in flow:
+                    body["shown_to"] = "conditional"
+            questions.append(body)
         return {
             "survey": {
                 "id": self.survey_id,
@@ -268,15 +407,26 @@ class Questionnaire:
                 "last_evaluation_date": self.last_evaluation_date,
                 "questionnaire_edited_after_lock": self.edited_after_lock(),
             },
-            "questions": [q.summary(ambiguous=q.id in self.ambiguous_ids) for q in self.questions],
+            "questions": questions,
             "notes": [
                 "Textos e valores são os do cadastro atual e valem para todo o histórico.",
             ]
             + (
                 [
+                    "Perguntas com shown_to=conditional não aparecem para todas as avaliações: têm regra de entrada "
+                    "(`entry_rules`: basta uma valer; dentro de uma regra, todas as condições) ou podem ser puladas por "
+                    "uma ramificação de pergunta anterior (`skipped_by_branching`). A base de cada uma é quem a viu, "
+                    "não o total de avaliações. A API pública não diz quem viu cada pergunta."
+                ]
+                if has_flow and any("shown_to" in x for x in questions)
+                else []
+            )
+            + (
+                [
                     "Perguntas com mapping=ambiguous_text têm o mesmo tipo e texto de outra pergunta. A API devolve as "
                     "respostas só com o texto; o motor atribui pela ordem das respostas quando só há uma possibilidade "
-                    "e só calcula a métrica se todas as respostas do período foram atribuídas."
+                    "e só calcula a métrica se todas as respostas do período foram atribuídas. Perguntas de mesmo "
+                    "texto não são redundantes: podem aparecer para públicos diferentes (veja `flow`)."
                 ]
                 if self.ambiguous_ids
                 else []

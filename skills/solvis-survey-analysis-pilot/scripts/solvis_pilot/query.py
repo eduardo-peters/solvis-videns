@@ -14,7 +14,7 @@ import secrets
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from . import ENGINE_VERSION, MODEL_VERSION, fmt, measures, periods
+from . import ENGINE_VERSION, MODEL_VERSION, flow, fmt, measures, periods
 from .catalog import Catalog
 from .config import Settings, local_time
 from .errors import EXIT_SYNC, EngineError
@@ -118,6 +118,30 @@ class QueryEngine:
             )
         return qn.by_id[qid]
 
+    def _check_flow(self, qn: Questionnaire, questions: Sequence[Question]) -> List[Dict[str, Any]]:
+        """Pergunta que só parte das avaliações viu (regra de entrada ou ramificação): a base não é o total."""
+        warnings: List[Dict[str, Any]] = []
+        for q in questions:
+            flow = qn.flow(q)
+            if not flow:
+                continue
+            parts = []
+            if flow.get("entry_rules"):
+                parts.append("aparece só para quem, " + " ou, alternativamente, ".join(
+                    r["requires"] for r in flow["entry_rules"]))
+            if flow.get("skipped_by_branching"):
+                parts.append("pode ser pulada por ramificação: " + "; ".join(
+                    f"na pergunta {b['question']}, quem {b['when']} vai para {b['goes_to']}"
+                    for b in flow["skipped_by_branching"]))
+            warnings.append(_w(
+                "conditional_question",
+                f"A pergunta {q.number} não é exibida a todas as avaliações: " + "; ".join(parts) + ". "
+                "O n é de quem a viu e respondeu, não do total de avaliações (`exposure` traz quantas a viram, inferido das regras); não compare com perguntas exibidas a todos "
+                "sem dizer isso, e não trate perguntas de mesmo texto como repetição sem ver a que público cada uma se destina.",
+                question_number=q.number, flow=flow,
+            ))
+        return warnings
+
     def _check_ambiguity(self, qn: Questionnaire, questions: Sequence[Question],
                          windows: Sequence[periods.Period]) -> List[Dict[str, Any]]:
         """Pergunta com tipo e texto iguais aos de outra: só calcula se toda resposta foi atribuída pela ordem."""
@@ -128,6 +152,9 @@ class QueryEngine:
             group = f"{q.answer_type}|{q.text}"
             twins = [x.number for x in qn.questions if x.id in qn.ambiguous_ids and x.answer_type == q.answer_type
                      and x.text == q.text]
+            twin_flow = {x.number: f for x in qn.questions if x.number in twins for f in [qn.flow(x)] if f}
+            audience = (" Elas não são redundantes: aparecem para públicos diferentes (`details.twin_flow`)."
+                        if twin_flow else "")
             assigned = unassigned = others = 0
             for w in windows:
                 a, u, o = self.db.execute(
@@ -145,16 +172,18 @@ class QueryEngine:
                     "ambiguous_question_text",
                     f"As perguntas {twins} têm o mesmo tipo e texto, e a API pública devolve as respostas só com o texto. "
                     f"No período há {assigned + unassigned + others} respostas com esse texto: {assigned} identificadas como "
-                    f"da pergunta {q.number}, {others} como de outra pergunta gêmea e {unassigned} sem como saber de qual.",
+                    f"da pergunta {q.number}, {others} como de outra pergunta gêmea e {unassigned} sem como saber de qual."
+                    + audience,
                     hint="Diga isso ao usuário e não dê número desta pergunta nem some as gêmeas. Perguntas de outro texto "
                          "seguem disponíveis; a tela de resultados da Solvis separa as gêmeas.",
                     details={"question_numbers": twins, "this_question": assigned, "other_twins": others,
-                             "unassigned": unassigned},
+                             "unassigned": unassigned, **({"twin_flow": twin_flow} if twin_flow else {})},
                 )
             warnings.append(_w(
                 "answers_assigned_by_order",
                 f"As perguntas {twins} têm o mesmo texto; as respostas da pergunta {q.number} foram identificadas pela "
-                "alternativa escolhida ou pela ordem em que vieram na avaliação (todas as do período foram identificadas).",
+                "alternativa escolhida ou pela ordem em que vieram na avaliação (todas as do período foram identificadas)."
+                + audience,
             ))
         return warnings
 
@@ -425,11 +454,7 @@ class QueryEngine:
             for r in self._grouped(sel, base(), dims):
                 out[r[:nd]] = measures.dq_result(r[nd], r[nd + 1] or 0, r[nd + 2] or 0, r[nd + 3] or 0, loc)
         elif m == "response_count":
-            pred = {
-                "NPS": "a.kind = 'nps' AND a.answered = 1",
-                "Multiple Response": "a.kind = 'multi' AND a.answered = 1",
-            }.get(q.answer_type, "a.choice_id IS NOT NULL" if q.answer_type in CHOICE_TYPES else "a.answered = 1")
-            for r in self._grouped("COUNT(DISTINCT e.eval_ref)", base(ans_join(pred)), dims):
+            for r in self._grouped("COUNT(DISTINCT e.eval_ref)", base(ans_join(_answered_pred(q))), dims):
                 out[r[:nd]] = measures.count_result(r[nd], loc)
         elif m == "nps":
             sel = ("SUM(CASE WHEN a.score >= 9 THEN 1 ELSE 0 END), SUM(CASE WHEN a.score BETWEEN 7 AND 8 THEN 1 ELSE 0 END), "
@@ -490,6 +515,58 @@ class QueryEngine:
                     })
                 out[key] = {"tagged_comments": tagged, "text_responses": texts.get(key, 0), "rows": rows_out}
         return out
+
+    # ============================================================ exposição
+    def _exposure(self, spec: QuerySpec, qn: Questionnaire, q: Question, period: periods.Period,
+                  dims: Sequence[Dim], ref_nps: Optional[Question], ref_choice_q: Optional[int],
+                  unit_names: Dict[int, str]) -> Dict[str, Any]:
+        """Quem viu a pergunta (inferido pelas regras do questionário) dentro do mesmo recorte da consulta."""
+        reached = flow.reached_evaluations(self.db, qn, spec.survey_id, period.start.isoformat(),
+                                           period.end.isoformat(), q.id)
+        self.db.execute("CREATE TEMP TABLE IF NOT EXISTS tmp_reach (eval_ref TEXT PRIMARY KEY, uncertain INTEGER)")
+        self.db.execute("DELETE FROM tmp_reach")
+        self.db.executemany("INSERT INTO tmp_reach VALUES (?,?)", [(k, 1 if v else 0) for k, v in reached.items()])
+        reach_join = ("JOIN tmp_reach r ON r.eval_ref = e.eval_ref", [])
+        uncertain_join = ("JOIN tmp_reach r ON r.eval_ref = e.eval_ref AND r.uncertain = 1", [])
+        answered_join = ("JOIN answers a ON a.survey_id = e.survey_id AND a.eval_ref = e.eval_ref AND a.question_id = ? "
+                         f"AND {_answered_pred(q)}", [q.id])
+        loc = spec.locale
+
+        def counts(dimensions: Sequence[Dim], target_join=None) -> Dict[Tuple, int]:
+            nd = len(dimensions)
+            base = self._base(spec, period, dimensions, target_join, ref_nps, ref_choice_q)
+            return {r[:nd]: r[nd] for r in self._grouped("COUNT(DISTINCT e.eval_ref)", base, dimensions)}
+
+        def share(part: int, whole: int) -> str:
+            return fmt.fmt_pct(measures.share_pct(part, whole), 1, loc) if whole else "-"
+
+        def build(dimensions: Sequence[Dim]) -> Dict[Tuple, Dict[str, Any]]:
+            scope, seen = counts(dimensions), counts(dimensions, reach_join)
+            answered, unsure = counts(dimensions, answered_join), counts(dimensions, uncertain_join)
+            out = {}
+            for k in sorted(scope, key=lambda k: self._sort_key(dimensions, k, unit_names)):
+                n_scope, n_seen, n_ans = scope[k], seen.get(k, 0), answered.get(k, 0)
+                out[k] = {"evaluations": n_scope, "reached": n_seen, "answered": n_ans,
+                          "reached_of_evaluations_display": share(n_seen, n_scope),
+                          "answered_of_reached_display": share(n_ans, n_seen),
+                          "uncertain_evaluations": unsure.get(k, 0)}
+            return out
+
+        body: Dict[str, Any] = {
+            "question": q.number,
+            "method": "inferred_from_questionnaire_rules",
+            "totals": build([]).get((), {"evaluations": 0, "reached": 0, "answered": 0}),
+            "assumptions": [
+                "A API pública não diz quais perguntas foram exibidas: o caminho de cada avaliação é refeito com as regras "
+                "de entrada e as ramificações do questionário e as respostas guardadas.",
+                "A pergunta inicial é a de posição 1; perguntas escondidas por variação de pesquisa não são vistas pela API.",
+                "Em avaliação incompleta, o caminho vai até a última pergunta com resposta gravada.",
+            ],
+        }
+        if dims:
+            body["rows"] = [{"dims": self._dim_labels(dims, k, qn, period, unit_names)[0], **v}
+                            for k, v in build(dims).items()]
+        return body
 
     # ============================================================ rótulos
     def _dim_labels(self, dims: Sequence[Dim], key: Tuple, qn: Questionnaire, period: periods.Period,
@@ -591,6 +668,7 @@ class QueryEngine:
         if ref_choice_q:
             used.append(qn.by_id[ref_choice_q])
         warnings.extend(self._check_ambiguity(qn, used, [p for p in (period, cperiod) if p]))
+        warnings.extend(self._check_flow(qn, used))
 
         self._prepare_units(
             need_props=any(d.kind == "unit_property" for d in dims) or bool(spec.property_value_ids),
@@ -617,6 +695,11 @@ class QueryEngine:
             unit_names.update({u["id"]: u["name"] for u in (self.store.get_catalog("units")[0] or [])})
         except (TypeError, KeyError):
             pass
+
+        exposure = None
+        if (q is not None and spec.metric not in ("tag_mentions", "evaluation_count", "data_quality_summary")
+                and qn.flow(q)):
+            exposure = self._exposure(spec, qn, q, period, dims, ref_nps, ref_choice_q, unit_names)
 
         def shift(key: Tuple) -> Optional[Tuple]:
             if spec.compare_with != "previous_year":
@@ -862,12 +945,21 @@ class QueryEngine:
             },
             "rows": rows,
             "totals": totals,
+            **({"exposure": exposure} if exposure else {}),
             "truncated": truncated,
             "available_rows": available,
             "warnings": warnings,
         }
         audit(self.s, "query", asdict(spec), envelope)
         return envelope
+
+
+def _answered_pred(q: Question) -> str:
+    """Condição SQL (alias `a`) de uma resposta efetiva à pergunta."""
+    return {
+        "NPS": "a.kind = 'nps' AND a.answered = 1",
+        "Multiple Response": "a.kind = 'multi' AND a.answered = 1",
+    }.get(q.answer_type, "a.choice_id IS NOT NULL" if q.answer_type in CHOICE_TYPES else "a.answered = 1")
 
 
 def _cat_id(cat: Dict[str, Any]) -> Any:

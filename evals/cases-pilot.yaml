@@ -96,6 +96,24 @@ cases:
     must_not: ["dá um número para a pergunta 7", "soma as duas perguntas"]
     invariants: [INV-16]
 
+  - id: p-id-03
+    category: identity
+    question: "As perguntas 3 e 4 ('Por quê?') não são a mesma coisa repetida? Dá para juntar?"
+    fixture: "pergunta 3 só aparece para quem escolheu 'Sim' na 1; pergunta 4 só para quem escolheu 'Não'"
+    expected_calls:
+      - {command: questionnaire, args: {survey: 90}}
+    must: ["lê o fluxo e diz que as perguntas aparecem para públicos diferentes", "não propõe somar as duas"]
+    must_not: ["chama de duplicadas", "divide a contagem pelo total de avaliações"]
+    invariants: [INV-16, INV-31]
+
+  - id: p-id-04
+    category: identity
+    question: "Qual o NPS da pergunta 2 e que parte dos clientes respondeu?"
+    fixture: "pergunta 2 tem regra de entrada (só quem escolheu 'Sim' na 1)"
+    must: ["fala a condição de entrada", "usa exposure para dizer quantas avaliações viram a pergunta e quantas responderam", "diz que quem viu é inferido das regras"]
+    must_not: ["divide n pelo evaluation_count", "afirma que viu como dado observado"]
+    invariants: [INV-31]
+
   - id: p-sc-01
     category: scope
     question: "Qual o NPS da pesquisa 9999?"
