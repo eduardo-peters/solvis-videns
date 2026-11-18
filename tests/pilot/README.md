@@ -4,7 +4,7 @@ Sem dependências fora da biblioteca padrão.
 
 ```bash
 cd tests/pilot
-python3 -m unittest test_units test_engine test_incremental test_start_month test_flow
+python3 -m unittest test_units test_engine test_incremental test_start_month test_flow test_sync_speed
 ```
 
 | Arquivo | Conteúdo |
@@ -14,6 +14,7 @@ python3 -m unittest test_units test_engine test_incremental test_start_month tes
 | `test_incremental.py` | Atualização incremental por `created_at` com relógio controlado: janela pedida, sobreposição sem duplicar, avaliação atrasada, intervalo maior que 7 dias, falha da API |
 | `test_start_month.py` | Mês inicial: sem ele nada é baixado, períodos e comparações anteriores a ele são recusados sem chamar a API, aviso de tags |
 | `test_flow.py` | Fluxo da pesquisa: regras de entrada e ramificações lidas do questionário, `flow` e `shown_to` em `questionnaire`, aviso `conditional_question`, `exposure` inferido (incompleta, pulou, desvio por ramificação, prioridade, grupo NPS), públicos das perguntas gêmeas |
+| `test_sync_speed.py` | Download: janelas em paralelo dão o mesmo total que sequencial, página de 10.000 (limite da API), `sync --until-complete` (termina em várias rodadas e para sem progresso), timeout de leitura e resposta interrompida retentados, índice cobrindo a junção e `ANALYZE` no cache (inclusive cache antigo) |
 | `fake_api.py` | API V1 falsa, fiel ao formato e às falhas da real (`handler_answers_service.rb`, `surveys_controller.rb`) |
 | `fixture.py` | Cliente "Rede Exemplo" com os casos de borda e os valores esperados no cabeçalho |
 | `demo.py` | Roda qualquer comando do motor contra a API falsa: `python3 tests/pilot/demo.py --pretty query --metric nps --survey 56 --question 812 --period month:2026-10 --group-by unit` |

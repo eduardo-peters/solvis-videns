@@ -146,6 +146,20 @@ def cmd_resolve(args, ctx: Context) -> Dict[str, Any]:
 def cmd_sync(args, ctx: Context) -> Dict[str, Any]:
     period = periods.resolve_period(ctx.s.today, args.period, args.start, args.end)
     report = ctx.syncer.ensure(args.survey, period.start, period.end, refresh=args.refresh)
+    rounds = 1
+    while getattr(args, "until_complete", False) and not report["complete"]:
+        # repete rodadas de `budget` segundos até terminar; para se uma rodada não avançar
+        nxt = ctx.syncer.ensure(args.survey, period.start, period.end, refresh=False)
+        rounds += 1
+        progressed = nxt["days_fetched"] > 0 or nxt["days_updated_incrementally"] > 0
+        for k in ("days_fetched", "days_updated_incrementally", "api_calls", "elapsed_s"):
+            nxt[k] = round(report[k] + nxt[k], 1) if k == "elapsed_s" else report[k] + nxt[k]
+        nxt["failed_windows"] = report["failed_windows"] + nxt["failed_windows"]
+        nxt["questionnaire_refreshed"] = report["questionnaire_refreshed"] or nxt["questionnaire_refreshed"]
+        report = nxt
+        if not progressed:
+            break
+    report["rounds"] = rounds
     report["coverage"] = coverage(ctx.store, args.survey, period.start, period.end, ctx.s.today)
     if not report["complete"]:
         report["next_step"] = "Rode o mesmo comando de novo para continuar o download."
@@ -255,7 +269,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--survey", type=int, required=True)
     _period_args(p)
     p.add_argument("--refresh", action="store_true", help="baixa de novo mesmo o que está em cache")
-    p.add_argument("--budget", type=float, help="segundos máximos desta execução (padrão 90)")
+    p.add_argument("--budget", type=float, help="segundos máximos de cada rodada (padrão 90)")
+    p.add_argument("--until-complete", action="store_true",
+                   help="repete rodadas até o período estar completo (para se uma rodada não avançar)")
 
     p = sub.add_parser("query", help="calcula uma métrica e devolve o envelope de evidência")
     p.add_argument("--metric", required=True)

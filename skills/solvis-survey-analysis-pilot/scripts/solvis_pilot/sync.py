@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 
 from .api import ApiClient, WindowError
@@ -35,7 +37,8 @@ from .semantics import Questionnaire
 from .store import Store
 from . import store as store_mod
 
-PER_PAGE = 5000
+PER_PAGE = 10000            # limite da API (per_page acima disso devolve HTTP 400)
+SYNC_WORKERS = 4            # janelas baixadas em paralelo por rodada (SOLVIS_SYNC_WORKERS)
 MIN_SPLIT_ON_ERROR = dt.timedelta(hours=1)
 MIN_SPLIT_ON_OVERFLOW = dt.timedelta(minutes=1)
 MAX_CHUNK_DAYS = 7
@@ -175,6 +178,32 @@ class Syncer:
             return
         out.extend(data)
 
+    @staticmethod
+    def _workers() -> int:
+        try:
+            return max(1, int(os.environ.get("SOLVIS_SYNC_WORKERS", SYNC_WORKERS)))
+        except ValueError:
+            return SYNC_WORKERS
+
+    def _fetch_batch(self, survey_id: int, qn: Questionnaire, batch: List[Tuple[dt.date, dt.date]],
+                     workers: int) -> List[Tuple[List[Dict[str, Any]], List[Tuple[dt.datetime, dt.datetime, str]], Counter]]:
+        """Baixa várias janelas ao mesmo tempo (só rede; a gravação no cache fica com quem chama)."""
+        def one(chunk: Tuple[dt.date, dt.date]):
+            c_start, c_end = chunk
+            ws = dt.datetime.combine(c_start, dt.time(0, 0, 0))
+            we = dt.datetime.combine(c_end, dt.time(23, 59, 59))
+            raws: List[Dict[str, Any]] = []
+            failed: List[Tuple[dt.datetime, dt.datetime, str]] = []
+            c_stats: Counter = Counter()
+            verify = bool(qn.last_evaluation_date and qn.last_evaluation_date >= c_start.isoformat())
+            self._fetch(survey_id, ws, we, raws, failed, c_stats, verify_empty=verify)
+            return raws, failed, c_stats
+
+        if workers <= 1 or len(batch) <= 1:
+            return [one(c) for c in batch]
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return list(pool.map(one, batch))
+
     def _incremental(self, survey_id: int, qn: Questionnaire, days: List[dt.date],
                      stats: Counter) -> Tuple[List[dt.date], Questionnaire]:
         """Acrescenta ao cache o que o servidor recebeu depois do ultimo download de `days`.
@@ -268,52 +297,63 @@ class Syncer:
             incremental_days = len(recent) - len(leftover)
             need = sorted(need + leftover)
         remaining = list(need)
+        wrote = incremental_days > 0
 
-        for c_start, c_end in self._chunks(need, chunk_days):
+        chunks = self._chunks(need, chunk_days)
+        workers = max(1, min(self._workers(), len(chunks) or 1))
+        if workers > 1 and chunks:
+            self.api.warm_up()  # token obtido antes das threads, para não logar em paralelo
+        pos = 0
+        while pos < len(chunks):
             if time.monotonic() - t0 > self.budget_s:
                 break
-            ws = dt.datetime.combine(c_start, dt.time(0, 0, 0))
-            we = dt.datetime.combine(c_end, dt.time(23, 59, 59))
-            raws: List[Dict[str, Any]] = []
-            failed: List[Tuple[dt.datetime, dt.datetime, str]] = []
-            overflow_before = stats["overflow_windows"]
-            verify = bool(qn.last_evaluation_date and qn.last_evaluation_date >= c_start.isoformat())
-            self._fetch(survey_id, ws, we, raws, failed, stats, verify_empty=verify)
-
-            days = [d.isoformat() for d in iter_days(c_start, c_end)]
-            day_set = set(days)
-            evals, answers, tags, issues = self._normalize(qn, raws, day_set)
-            if not refreshed_questionnaire and any(code == "unmapped_question" for _, code, _ in issues):
-                # questionário editado depois do último download: relê e mapeia de novo
-                qn = self.catalog.refresh_questionnaire(survey_id)
-                refreshed_questionnaire = True
+            batch = chunks[pos:pos + workers]
+            pos += len(batch)
+            results = self._fetch_batch(survey_id, qn, batch, workers)
+            for (c_start, c_end), (raws, failed, c_stats) in zip(batch, results):
+                overflow_before = stats["overflow_windows"]
+                stats.update(c_stats)
+                days = [d.isoformat() for d in iter_days(c_start, c_end)]
+                day_set = set(days)
                 evals, answers, tags, issues = self._normalize(qn, raws, day_set)
+                if not refreshed_questionnaire and any(code == "unmapped_question" for _, code, _ in issues):
+                    # questionário editado depois do último download: relê e mapeia de novo
+                    qn = self.catalog.refresh_questionnaire(survey_id)
+                    refreshed_questionnaire = True
+                    evals, answers, tags, issues = self._normalize(qn, raws, day_set)
 
-            failed_by_day: Dict[str, List[List[str]]] = {}
-            for fs, fe, reason in failed:
-                window = [fs.strftime("%Y-%m-%d %H:%M:%S"), fe.strftime("%Y-%m-%d %H:%M:%S"), reason]
-                failed_all.append(window)
-                for d in iter_days(fs.date(), fe.date()):
-                    failed_by_day.setdefault(d.isoformat(), []).append(window)
+                failed_by_day: Dict[str, List[List[str]]] = {}
+                for fs, fe, reason in failed:
+                    window = [fs.strftime("%Y-%m-%d %H:%M:%S"), fe.strftime("%Y-%m-%d %H:%M:%S"), reason]
+                    failed_all.append(window)
+                    for d in iter_days(fs.date(), fe.date()):
+                        failed_by_day.setdefault(d.isoformat(), []).append(window)
 
-            self.store.replace_days(
-                survey_id,
-                days,
-                evals.values(),
-                [a for refs in answers.values() for a in refs],
-                [t for refs in tags.values() for t in refs],
-                dict(issues),
-                failed_by_day,
-            )
-            fetched_days.extend(days)
-            remaining = [d for d in remaining if d.isoformat() not in day_set]
+                self.store.replace_days(
+                    survey_id,
+                    days,
+                    evals.values(),
+                    [a for refs in answers.values() for a in refs],
+                    [t for refs in tags.values() for t in refs],
+                    dict(issues),
+                    failed_by_day,
+                )
+                wrote = True
+                fetched_days.extend(days)
+                remaining = [d for d in remaining if d.isoformat() not in day_set]
 
-            # ajusta o tamanho da janela para a próxima rodada
-            if stats["overflow_windows"] > overflow_before:
-                chunk_days = max(1, chunk_days // 2)
-            elif len(raws) < PER_PAGE // 4 and chunk_days < MAX_CHUNK_DAYS:
-                chunk_days += 1
+                # ajusta o tamanho da janela para a próxima rodada
+                if stats["overflow_windows"] > overflow_before:
+                    chunk_days = max(1, chunk_days // 2)
+                elif len(raws) < PER_PAGE // 4 and chunk_days < MAX_CHUNK_DAYS:
+                    chunk_days += 1
             self.store.set_meta(f"chunk_days:{survey_id}", str(chunk_days))
+            if chunk_days != (chunks[pos - 1][1] - chunks[pos - 1][0]).days + 1 and pos < len(chunks):
+                # tamanho de janela mudou: replaneja o que falta com o novo tamanho
+                chunks = chunks[:pos] + self._chunks([d for d in remaining], chunk_days)
+
+        if wrote:
+            self.store.analyze()
 
         return {
             "survey_id": survey_id,

@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS answers (
   question_id INTEGER, qgroup TEXT, kind TEXT NOT NULL,
   choice_id INTEGER, score INTEGER, answered INTEGER NOT NULL, text TEXT);
 CREATE INDEX IF NOT EXISTS ans_q ON answers (survey_id, question_id, day);
-CREATE INDEX IF NOT EXISTS ans_ev ON answers (survey_id, eval_ref);
+DROP INDEX IF EXISTS ans_ev;
+CREATE INDEX IF NOT EXISTS ans_ev_q ON answers (survey_id, eval_ref, question_id);
 CREATE TABLE IF NOT EXISTS answer_tags (
   survey_id INTEGER NOT NULL, eval_ref TEXT NOT NULL, day TEXT NOT NULL,
   question_id INTEGER, tag_id INTEGER NOT NULL, tag_name TEXT);
@@ -72,6 +73,20 @@ class Store:
         if current is None:
             self.set_meta("schema_version", SCHEMA_VERSION)
         self._register_functions()
+        if not self.has_statistics() and self.db.execute("SELECT 1 FROM answers LIMIT 1").fetchone():
+            # Cache de versão anterior, nunca analisado: sem estatísticas o planejador pode escolher
+            # o índice errado na junção de respostas e uma consulta de pergunta leva horas.
+            self.analyze()
+
+    # ------------------------------------------------------------ estatísticas
+    def has_statistics(self) -> bool:
+        row = self.db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_stat1'").fetchone()
+        return bool(row) and bool(self.db.execute("SELECT 1 FROM sqlite_stat1 LIMIT 1").fetchone())
+
+    def analyze(self) -> None:
+        """Atualiza as estatísticas do planejador (ANALYZE). Chamar depois de gravar dias novos."""
+        self.db.execute("ANALYZE")
+        self.db.commit()
 
     def _register_functions(self) -> None:
         self.db.create_function("bucket", 2, lambda kind, day: periods.bucket_key(kind, day), deterministic=True)

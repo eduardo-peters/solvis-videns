@@ -18,7 +18,7 @@ Listas aceitam vírgula ou repetição: `--group-by unit,month` ou `--group-by u
 | `resolve --kind K --text T [--survey ID] [--question ID]` | Texto → candidatos com id e tipo de casamento (`exact`, `prefix`, `word`, `contains`). K: `survey`, `question` (aceita "pergunta 3"), `choice` (aceita a letra), `unit`, `property`, `property_value`, `tag`. `exact_match` só é verdadeiro com um único casamento exato |
 | `query ...` | Calcula uma métrica e devolve o envelope (abaixo) |
 | `comments ...` | Comentários mascarados, mais recentes primeiro (abaixo) |
-| `sync --survey ID --period P` | Baixa um período para o cache sem consultar. Útil para períodos longos; `query` e `comments` já baixam o que falta |
+| `sync --survey ID --period P [--until-complete] [--budget S]` | Baixa um período para o cache sem consultar. Útil para períodos longos; `query` e `comments` já baixam o que falta. `--until-complete` repete rodadas de `--budget` segundos (padrão 90) até terminar e devolve `rounds`; sem ele, rode o comando de novo enquanto `complete` for falso. Janelas são baixadas em paralelo (`SOLVIS_SYNC_WORKERS`, padrão 4) |
 | `explain --query-id ID` | Reabre uma consulta feita antes (pedido e envelope) |
 | `model` | Métricas, recortes e presets aceitos |
 | `purge --yes` | Apaga cache, token e registro de consultas (confirme com o usuário) |
@@ -141,7 +141,7 @@ Em pergunta condicional (`shown_to: conditional`), o envelope traz também `expo
 | `not_found` | Pesquisa, pergunta, unidade ou valor fora do escopo da credencial. Dizer que não está disponível; não tentar outros ids |
 | `start_month_required` | Perguntar ao usuário o primeiro mês que interessa e rodar `config --start-month AAAA-MM` |
 | `period_before_start` | O período (ou a comparação) começa antes do mês inicial. Usar datas a partir de `details.earliest_day`, ou perguntar se o usuário quer antecipar o mês inicial |
-| `sync_incomplete` | O download não terminou no tempo desta execução. Rodar o mesmo comando de novo |
+| `sync_incomplete` | O download não terminou no tempo desta execução. Rodar o mesmo comando de novo, ou, para períodos longos, `sync --survey ID --period P --until-complete --budget 300` |
 | `metric_not_available` | A métrica não existe; o `message` diz a alternativa |
 | `metric_not_applicable` | Métrica incompatível com o tipo da pergunta; rever em `questionnaire` |
 | `ambiguous_question_text` | Perguntas com mesmo tipo e texto que o motor não conseguiu separar; dizer isso com os números do `message` (`details`: desta pergunta, das gêmeas, sem dono) |

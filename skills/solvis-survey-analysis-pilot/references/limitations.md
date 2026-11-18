@@ -23,7 +23,7 @@ Esta versão lê a API pública V1 da Solvis. Ela não tem endpoint de métricas
 | Avaliações repetidas (mesmo texto, minutos de diferença) | Não remove: sem Data Quality, o sistema não marca repetição | Mencionar que podem inflar contagens, se aparecerem |
 | A API devolve lista vazia quando falha ao montar as respostas | O motor confere dia a dia e avisa (`possible_silent_failure`, `suspicious_empty_days`) | "A API não devolveu avaliações de X a Y; pode ser falha da API. Vale conferir na tela de resultados." |
 | A API recusa uma janela (HTTP 400) | O motor divide a janela até isolar o trecho e o exclui (`incomplete_coverage`) | "Os números excluem o trecho de <datas>, que a API não entregou." |
-| Download longo | O motor baixa no máximo ~90 s por comando e continua no seguinte (`sync_incomplete`) | "Ainda estou baixando os dados; continuo em seguida." |
+| Download longo | O motor baixa no máximo ~90 s por comando e continua no seguinte (`sync_incomplete`). Para períodos longos, `sync --until-complete --budget 300` repete as rodadas sozinho; as janelas são baixadas 4 a 4 em paralelo | "Ainda estou baixando os dados; continuo em seguida." |
 
 ## Atualização dos dados
 

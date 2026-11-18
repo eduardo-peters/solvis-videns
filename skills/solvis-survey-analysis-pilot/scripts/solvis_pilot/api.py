@@ -16,8 +16,10 @@ Regras de segurança aplicadas aqui (não remover):
 from __future__ import annotations
 
 import datetime as dt
+import http.client
 import json
 import os
+import socket
 import stat
 import time
 import urllib.error
@@ -100,6 +102,10 @@ class ApiClient:
         self._login()
         return self._token["access_token"]  # type: ignore[index]
 
+    def warm_up(self) -> None:
+        """Garante um token válido antes de chamadas em paralelo."""
+        self._access_token()
+
     # ------------------------------------------------------------------ http
     def _raw(
         self,
@@ -139,7 +145,10 @@ class ApiClient:
                         time.sleep(min(delay, 60))
                         continue
                 return status, payload
-            except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            except (urllib.error.URLError, TimeoutError, ConnectionError, socket.timeout, http.client.HTTPException,
+                    OSError) as exc:
+                # socket.timeout só vira TimeoutError no Python 3.10; IncompleteRead/RemoteDisconnected
+                # chegam como HTTPException. Todos são falhas transitórias de rede: tentar de novo.
                 last_exc = exc
                 if attempt < len(RETRY_DELAYS_S):
                     time.sleep(RETRY_DELAYS_S[attempt])
