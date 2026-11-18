@@ -11,6 +11,7 @@ Listas aceitam vírgula ou repetição: `--group-by unit,month` ou `--group-by u
 | Comando | Para quê |
 |---|---|
 | `scope` | Resumo da credencial: pesquisas ativas nos últimos 90 dias (até 15), total de pesquisas, unidades, UFs, propriedades de unidade e capacidades desta versão |
+| `config [--start-month AAAA-MM]` | Mostra ou define o primeiro mês que o usuário quer analisar. Sem ele, `query`, `comments` e `sync` recusam (`start_month_required`); nada antes dele é baixado. `scope` também mostra `start_month` |
 | `surveys [--search T] [--active-in PRESET] [--include-archived] [--limit N]` | Lista ou busca pesquisas, mais recentes primeiro. `--active-in last_90_days` mostra só as que têm avaliação no período (pela data da última avaliação; arquivadas só com `--include-archived`) |
 | `questionnaire --survey ID` | Perguntas (id, número, texto, tipo, `metric` recomendada, `metric_kind`, escala, LGPD, zona de referência, alternativas com id/letra/valor). Campos opcionais só aparecem quando definidos: sem `metric_kind`, a escala é de média |
 | `units [--search T] [--properties]` | Unidades com cidade, UF e propriedades; `--properties` lista nomes e valores de propriedade com ids |
@@ -119,6 +120,7 @@ Distribuições (`choice_share`, `multi_response_share`, `tag_mentions`) têm um
 | `answers_assigned_by_order` | A pergunta tem texto repetido; as respostas foram separadas pela ordem. Pode citar o número; mencione a ressalva se o usuário for comparar perguntas gêmeas |
 | `includes_unverified_evaluations` | Pesquisa com Data Quality, política `all` e avaliações reprovadas ou não verificadas no período: dizer quantas entram |
 | `data_quality_not_enabled` | A pesquisa não tem Data Quality |
+| `tags_as_of_last_sync` | Tags só mudam no cache quando o dia é baixado de novo. Dizer isso e, se importar, sugerir `sync --refresh` do período |
 | `tag_semantics` | Tags vêm de pessoas ou do Radar; base = comentários com tag; soma passa de 100% |
 | `partial_tag_coverage` | Só parte dos comentários tem tag; dizer a proporção |
 | `incomplete_coverage` | A API falhou em parte do período; os números excluem as janelas em `failed_windows`. Dizer isso |
@@ -134,6 +136,8 @@ Distribuições (`choice_share`, `multi_response_share`, `tag_mentions`) têm um
 | `missing_credentials`, `auth_failed` | Explicar ao usuário como configurar a credencial (SKILL.md). Não pedir a senha no chat |
 | `api_unreachable`, `api_error` | Dizer que a API Solvis não respondeu e sugerir tentar mais tarde |
 | `not_found` | Pesquisa, pergunta, unidade ou valor fora do escopo da credencial. Dizer que não está disponível; não tentar outros ids |
+| `start_month_required` | Perguntar ao usuário o primeiro mês que interessa e rodar `config --start-month AAAA-MM` |
+| `period_before_start` | O período (ou a comparação) começa antes do mês inicial. Usar datas a partir de `details.earliest_day`, ou perguntar se o usuário quer antecipar o mês inicial |
 | `sync_incomplete` | O download não terminou no tempo desta execução. Rodar o mesmo comando de novo |
 | `metric_not_available` | A métrica não existe; o `message` diz a alternativa |
 | `metric_not_applicable` | Métrica incompatível com o tipo da pergunta; rever em `questionnaire` |

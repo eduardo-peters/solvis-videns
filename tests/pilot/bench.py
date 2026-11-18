@@ -27,6 +27,7 @@ os.environ.update({"SOLVIS_API_BASE_URL": f.start(), "SOLVIS_API_USERNAME": f.us
 args = ["query", "--metric", "nps", "--survey", "56", "--question", str(fixture.NPS), "--start", "2026-09-01",
         "--end", (dt.date(2026, 9, 1) + dt.timedelta(days=days - 1)).isoformat(), "--group-by", "unit",
         "--budget", "600"]
+cli.main(["config", "--start-month", "2026-09"])
 t0 = time.time()
 cli.main(args)
 t1 = time.time()

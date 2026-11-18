@@ -8,7 +8,8 @@ Regras de segurança aplicadas aqui (não remover):
   que depende de um answer_id que a V1 não expõe);
 - avaliações só são pedidas para pesquisas que a própria credencial lista em
   GET /api/v1/surveys (ver Catalog.require_survey);
-- os parâmetros search_date_scope e reliable nunca são enviados;
+- o parâmetro reliable nunca é enviado; search_date_scope só vai com o literal fixo
+  `received_at` (nunca um valor vindo do usuário), para o cursor por created_at;
 - a credencial e o token nunca vão para a saída.
 """
 
@@ -191,12 +192,15 @@ class ApiClient:
         return self._paginate("/api/v1/surveyed_units")
 
     def evaluations_with_tags(
-        self, survey_id: int, start: dt.datetime, end: dt.datetime, per_page: int
+        self, survey_id: int, start: dt.datetime, end: dt.datetime, per_page: int, received: bool = False
     ) -> List[Dict[str, Any]]:
         """Avaliações com started_at (hora local da unidade) em [start, end], inclusivo.
 
         A API não converte fuso: o horário enviado sem offset é comparado direto com
         started_at, que já está na hora local da unidade.
+
+        Com received=True o intervalo vale para created_at (quando o servidor recebeu a
+        avaliação), em UTC, e os shards são escolhidos pelas mesmas datas.
         """
         params = {
             "start_date": start.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -204,6 +208,8 @@ class ApiClient:
             "page": 1,
             "per_page": per_page,
         }
+        if received:
+            params["search_date_scope"] = "received_at"  # literal fixo, nunca valor externo
         status, body = self.get(f"/api/v1/surveys/{int(survey_id)}/evaluations_with_tags", params)
         if status == 200 and isinstance(body, dict) and isinstance(body.get("data"), list):
             return body["data"]

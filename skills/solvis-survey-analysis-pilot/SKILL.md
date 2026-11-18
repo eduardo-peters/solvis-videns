@@ -32,7 +32,7 @@ Lista completa e justificativas: [references/invariants.md](references/invariant
 
 ## Fluxo de trabalho
 
-1. **Escopo.** Na primeira pergunta da conversa, rode `scope`. Ele mostra as pesquisas ativas nos últimos 90 dias, quantas unidades e propriedades de unidade existem e o que esta versão consegue ou não fazer. Para outras pesquisas, `surveys --search <nome>` ou `surveys --active-in <preset>`.
+1. **Escopo e mês inicial.** Na primeira pergunta da conversa, rode `scope`. Se `start_month` vier vazio (ou o motor responder `start_month_required`), pergunte ao usuário a partir de que mês ele quer analisar os dados (quanto mais recente, mais rápido o primeiro download) e rode `config --start-month AAAA-MM`. Em seguida, em uma ou duas frases, diga que as tags só são atualizadas quando os dados são baixados de novo e sugira a rotina de [references/limitations.md](references/limitations.md): ressincronizar o dia anterior todo dia, a semana anterior na segunda-feira e o mês anterior no dia 1. Faça isso só uma vez por conversa. Ele mostra as pesquisas ativas nos últimos 90 dias, quantas unidades e propriedades de unidade existem e o que esta versão consegue ou não fazer. Para outras pesquisas, `surveys --search <nome>` ou `surveys --active-in <preset>`.
 2. **Entenda o pedido.** Identifique métrica, pesquisa e pergunta, recorte (unidade, mês, regional...), período e comparação. Use [references/glossary.md](references/glossary.md) para traduzir os termos do usuário.
 3. **Resolva entidades.** `resolve --kind survey|question|choice|unit|property|property_value|tag --text "..."`. Sem pesquisa citada e com várias ativas, pergunte; se só uma tiver avaliações no período, use e declare.
 4. **Confira a pergunta.** `questionnaire --survey <id>`. Cada pergunta traz o campo `metric` com a métrica principal do tipo dela ([references/question-types.md](references/question-types.md)). Pergunta com `mapping: ambiguous_text` pode ser recusada pelo motor (ver limitações).
@@ -51,7 +51,7 @@ Pontos que mais causam erro:
 - **Percentuais:** fale sempre os campos `*_display`. Se um percentual que você quer dizer não vier pronto no envelope, não o calcule: diga as contagens.
 - **Média de escala:** diga sempre a escala (`scale_min` a `scale_max`). "Não se aplica" não entra na média.
 - **Múltipla resposta e tags:** as porcentagens passam de 100%.
-- **Tags:** a base são os comentários com ao menos uma tag, não todos os comentários. Tags são o que pessoas ou o Radar marcaram, não causa provada.
+- **Tags:** valem até o último download de cada dia (aviso `tags_as_of_last_sync`); se importar, sugira `sync --refresh` do período. A base são os comentários com ao menos uma tag, não todos os comentários. Tags são o que pessoas ou o Radar marcaram, não causa provada.
 - **Tempo:** datas e horas são locais de cada unidade. Não converta fuso. Período que inclui hoje está em andamento.
 - **Questionário atual:** textos e valores de alternativas são os de hoje, inclusive para dados antigos.
 - **Confiabilidade:** em pesquisa com Data Quality, o padrão inclui avaliações reprovadas e não verificadas (aviso `includes_unverified_evaluations`). Diga isso; use `--reliability reliable_only` se o usuário quiser o recorte das telas para quem não gerencia confiabilidade.
@@ -70,6 +70,7 @@ Não pergunte por período, pesquisa ou unidade quando houver padrão: use o pad
 
 Recuse, explicando o motivo e oferecendo o que existe, quando:
 
+- o período começa antes do mês inicial (`period_before_start`): diga a data mais antiga disponível e pergunte se ele quer antecipar o mês inicial (o download será maior);
 - a métrica não está no modelo (`metric_not_available`);
 - o recorte não é suportado (`unsupported_combination`): ofereça o mais próximo;
 - a pergunta tem texto repetido e o motor não conseguiu separar as respostas (`ambiguous_question_text`): diga os números do `message` e ofereça outras perguntas;

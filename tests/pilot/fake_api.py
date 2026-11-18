@@ -3,7 +3,8 @@
 Reproduz:
 - OAuth password/refresh em POST /api/v1/oauth/token;
 - listas paginadas (will_paginate, per_page padrão 100);
-- evaluations_with_tags SEM filtro de cliente (como o código real), paginação
+- evaluations_with_tags com search_date_scope=received_at (filtra created_at, mas os shards
+  seguem o started_at da avaliação), SEM filtro de cliente (como o código real), paginação
   por shard mensal concatenada, end_date comparado no segundo;
 - formatted_answers só com textos (HandlerAnswersService), Multiple Response
   como objeto, tipos "default" como lista de listas, choice_value como string;
@@ -240,6 +241,7 @@ class FakeSolvis:
                 page = int(qs.get("page", 1))
                 if per_page > 10000:
                     return self._send(400, {"error": "per_page não pode ser maior que 100"})
+                column = "created_at" if qs.get("search_date_scope") == "received_at" else "started_at"
                 months = []
                 m = dt.date(start.year, start.month, 1)
                 while m <= end.date():
@@ -248,7 +250,7 @@ class FakeSolvis:
                 selected = []
                 for month in months:  # um shard por mês, do mais antigo ao mais novo
                     shard = [e for e in fake.evaluations if e["survey_id"] == survey_id
-                             and e["started_at"].strftime("%Y-%m") == month and start <= e["started_at"] <= end]
+                             and e["started_at"].strftime("%Y-%m") == month and start <= e[column] <= end]
                     shard.sort(key=lambda e: e["created_at"], reverse=True)
                     selected.extend(shard[(page - 1) * per_page: page * per_page])
                 if any(e["bad_unit"] for e in selected):

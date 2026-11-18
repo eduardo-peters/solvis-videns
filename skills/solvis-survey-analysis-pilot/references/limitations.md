@@ -26,7 +26,19 @@ Esta versão lê a API pública V1 da Solvis. Ela não tem endpoint de métricas
 
 ## Atualização dos dados
 
-O motor guarda as avaliações num cache local. Dias recentes (até 3 dias atrás) são baixados de novo depois de 1 hora; hoje, depois de 10 minutos; dias antigos, depois de 7 dias. `--refresh` força um novo download. `freshness.fetched_newest` diz quando foi o último.
+O motor guarda as avaliações num cache local. Dias recentes (até 3 dias atrás) são atualizados depois de 1 hora; hoje, depois de 10 minutos; dias antigos, são baixados de novo depois de 7 dias. A atualização dos dias recentes pede só as avaliações recebidas desde o último download. `--refresh` força um novo download. `freshness.fetched_newest` diz quando foi o último.
+
+## Mês inicial e ressincronização
+
+O motor só baixa dados a partir do mês que o usuário escolhe na primeira consulta (`config --start-month`); pedidos de períodos anteriores são recusados até ele antecipar o mês. Isso evita varrer anos sem dados e acelera o primeiro download.
+
+Tags (e qualquer outra mudança feita depois que a avaliação foi baixada) só chegam ao cache quando o dia é baixado de novo. Rotina sugerida, a ser agendada pelo usuário (a skill não agenda sozinha), para cada pesquisa que ele acompanha:
+
+| Quando | Comando |
+|---|---|
+| Todo dia | `sync --survey ID --period yesterday --refresh` |
+| Toda segunda-feira | `sync --survey ID --period last_week --refresh` |
+| No dia 1 de cada mês | `sync --survey ID --period last_month --refresh` |
 
 ## Primeiro uso
 

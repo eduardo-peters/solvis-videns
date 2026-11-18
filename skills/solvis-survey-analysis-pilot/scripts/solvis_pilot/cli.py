@@ -1,6 +1,6 @@
 """Linha de comando do motor. Toda saída é JSON em stdout; erros também.
 
-Comandos: scope, questionnaire, units, resolve, query, comments, sync, explain, model, purge.
+Comandos: scope, config, questionnaire, units, resolve, query, comments, sync, explain, model, purge.
 Referência completa: references/cli.md.
 """
 
@@ -22,7 +22,7 @@ from .errors import EngineError
 from .query import METRICS, NOT_AVAILABLE, QueryEngine, QuerySpec, find_query
 from .resolve import resolve
 from .store import Store
-from .sync import Syncer, coverage
+from .sync import Syncer, coverage, set_start_month, start_month_info
 
 
 def _ints(values: Optional[List[str]]) -> List[int]:
@@ -63,6 +63,7 @@ def cmd_scope(args, ctx: Context) -> Dict[str, Any]:
         "model_version": MODEL_VERSION,
         "api": ctx.s.base_url,
         "today": ctx.s.today.isoformat(),
+        **start_month_info(ctx.store),
         "surveys": {
             "total": len(index),
             "archived": sum(1 for s in index if s["archived"]),
@@ -130,6 +131,12 @@ def cmd_units(args, ctx: Context) -> Dict[str, Any]:
         ]
     body["notes"] = ["Cidade, UF e propriedades são do cadastro atual e valem para todo o histórico da unidade."]
     return body
+
+
+def cmd_config(args, ctx: Context) -> Dict[str, Any]:
+    if args.start_month:
+        return set_start_month(ctx.store, args.start_month, ctx.s.today)
+    return start_month_info(ctx.store)
 
 
 def cmd_resolve(args, ctx: Context) -> Dict[str, Any]:
@@ -235,6 +242,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=200)
     p.add_argument("--refresh", action="store_true")
 
+    p = sub.add_parser("config", help="mostra ou define o mês inicial da análise (nada antes dele é baixado)")
+    p.add_argument("--start-month", help="AAAA-MM")
+
     p = sub.add_parser("resolve", help="texto -> candidatos com id")
     p.add_argument("--kind", required=True, choices=["survey", "question", "choice", "unit", "property", "property_value", "tag"])
     p.add_argument("--text", required=True)
@@ -299,7 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 COMMANDS = {
     "scope": cmd_scope, "surveys": cmd_surveys, "questionnaire": cmd_questionnaire, "units": cmd_units,
-    "resolve": cmd_resolve, "sync": cmd_sync, "query": cmd_query, "comments": cmd_comments, "explain": cmd_explain,
+    "config": cmd_config, "resolve": cmd_resolve, "sync": cmd_sync, "query": cmd_query, "comments": cmd_comments, "explain": cmd_explain,
     "model": cmd_model, "purge": cmd_purge,
 }
 NO_CONTEXT = ("explain", "model", "purge")

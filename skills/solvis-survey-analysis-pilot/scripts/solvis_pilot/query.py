@@ -804,6 +804,10 @@ class QueryEngine:
                 warnings.append(_w("partial_tag_coverage",
                                    f"Só {tt.get('tagged_comments', 0)} de {tt.get('text_responses', 0)} comentários "
                                    "têm tag; os demais não foram classificados ou não citaram tema da lista do cliente."))
+        if spec.metric == "tag_mentions" or spec.tag_ids:
+            warnings.append(_w("tags_as_of_last_sync", "As tags valem até o último download de cada dia: tags aplicadas "
+                                                       "depois só aparecem quando o dia é baixado de novo (`sync --refresh`). "
+                                                       "Veja `freshness`."))
         if spec.metric == "data_quality_summary" and n_dq == 0:
             warnings.append(_w("data_quality_not_enabled", "A pesquisa não tem Data Quality ligado (a API não traz o campo reliable)."))
         if qn.archived:

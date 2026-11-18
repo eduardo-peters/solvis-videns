@@ -159,6 +159,49 @@ class Store:
                 ],
             )
 
+    def known_refs(self, survey_id: int, refs: Sequence[str]) -> set:
+        found = set()
+        for i in range(0, len(refs), 500):
+            part = list(refs[i:i + 500])
+            rows = self.db.execute(
+                "SELECT eval_ref FROM evaluations WHERE survey_id = ? AND eval_ref IN (%s)" % ",".join("?" * len(part)),
+                (survey_id, *part),
+            ).fetchall()
+            found.update(r["eval_ref"] for r in rows)
+        return found
+
+    def add_to_days(
+        self,
+        survey_id: int,
+        days: Sequence[str],
+        evaluations: Iterable[Tuple],
+        answers: Iterable[Tuple],
+        tags: Iterable[Tuple],
+        issues: Dict[Tuple[str, str, str], int],
+    ) -> None:
+        """Acrescenta avaliações novas a dias já baixados e marca esses dias como atualizados agora.
+
+        Quem chama garante que as avaliações não estão no cache (ver known_refs).
+        """
+        fetched_at = now_utc()
+        with self.db:
+            self.db.executemany("INSERT INTO evaluations VALUES (?,?,?,?,?,?,?,?,?,?,?)", list(evaluations))
+            self.db.executemany("INSERT INTO answers VALUES (?,?,?,?,?,?,?,?,?,?)", list(answers))
+            self.db.executemany("INSERT INTO answer_tags VALUES (?,?,?,?,?,?)", list(tags))
+            self.db.executemany(
+                "INSERT INTO issues (survey_id, day, code, detail, count) VALUES (?,?,?,?,?) "
+                "ON CONFLICT (survey_id, day, code, detail) DO UPDATE SET count = count + excluded.count",
+                [(survey_id, d, code, detail, n) for (d, code, detail), n in issues.items()],
+            )
+            for d in days:
+                n = self.db.execute(
+                    "SELECT COUNT(*) FROM evaluations WHERE survey_id = ? AND day = ?", (survey_id, d)
+                ).fetchone()[0]
+                self.db.execute(
+                    "UPDATE days SET evaluations = ?, fetched_at = ? WHERE survey_id = ? AND day = ?",
+                    (n, fetched_at, survey_id, d),
+                )
+
     def purge(self) -> None:
         self.db.close()
         for suffix in ("", "-wal", "-shm"):

@@ -160,6 +160,10 @@ def list_comments(spec: CommentSpec, store: Store, catalog: Catalog, syncer: Syn
     if lgpd_text and spec.question_id is None:
         notes.append(f"Perguntas protegidas por LGPD ({lgpd_text}) ficam fora da lista.")
 
+    if spec.tag_ids or any("tags" in c for c in out):
+        notes.append("As tags valem até o último download de cada dia; tags aplicadas depois só aparecem quando o dia "
+                     "é baixado de novo (`sync --refresh`). Veja `freshness`.")
+
     envelope = {
         "query_id": "c_" + secrets.token_hex(4),
         "engine_version": ENGINE_VERSION,

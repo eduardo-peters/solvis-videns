@@ -3,6 +3,8 @@
     python tests/pilot/demo.py query --metric nps --survey 56 --question 812 --period month:2026-10 --group-by unit
 """
 
+import contextlib
+import io
 import os
 import sys
 import tempfile
@@ -24,6 +26,8 @@ if __name__ == "__main__":
         "SOLVIS_TODAY": "2026-11-17",
     })
     try:
+        with contextlib.redirect_stdout(io.StringIO()):  # mês inicial para a demonstração
+            cli.main(["config", "--start-month", os.environ.get("DEMO_START_MONTH", "2025-01")])
         code = cli.main(sys.argv[1:])
     finally:
         fake.stop()

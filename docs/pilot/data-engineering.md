@@ -28,9 +28,18 @@ comments.py       comentários mascarados com grupo NPS do autor e tags
 | Qualquer erro na montagem das respostas devolve **HTTP 200 com `data: []`** para a janela inteira (`handler_answers_service.rb:14-19`) | Janela de vários dias vazia, em pesquisa com avaliação registrada depois do início da janela, é conferida dia a dia. Uma falha custa só o próprio dia |
 | Unidade inexistente na janela devolve **HTTP 400** (`SurveyedUnit.find`) | Divide a janela até menos de 1 hora; o trecho que continua falhando entra em `coverage.failed_windows` e o dia fica `partial` |
 | `GET /surveys/:id/evaluations` não filtra por cliente | O motor só pede avaliações de pesquisa que `GET /surveys/:id` (filtrado por cliente) devolve |
-| `search_date_scope` e `reliable` passam para o SQL sem tratamento | O motor nunca envia esses parâmetros; filtra confiabilidade localmente |
+| `search_date_scope` e `reliable` passam para o SQL sem tratamento | `reliable` nunca é enviado (a confiabilidade é filtrada localmente). `search_date_scope` só vai com o literal fixo `received_at`, nunca com valor externo, para a atualização incremental (seção abaixo) |
 
-Livro de cobertura (`days`): uma linha por (pesquisa, dia local) com status `ok`/`partial`, contagem e `fetched_at`. Regras de atualização: hoje, a cada 10 minutos; até 3 dias atrás (totens offline enviam atrasado), a cada hora; dias antigos, a cada 7 dias (`SOLVIS_CACHE_TTL_DAYS`); `partial`, a cada hora. O tamanho da janela inicial (até 7 dias) se adapta ao volume e fica guardado por pesquisa.
+Livro de cobertura (`days`): uma linha por (pesquisa, dia local) com status `ok`/`partial`, contagem e `fetched_at`. Regras de atualização: hoje, a cada 10 minutos; até 3 dias atrás (totens offline enviam atrasado), a cada hora; dias antigos, a cada 7 dias (`SOLVIS_CACHE_TTL_DAYS`); `partial`, a cada hora. Hoje e os dias até 3 dias atrás são atualizados de forma incremental (abaixo); os demais são baixados por inteiro. O tamanho da janela inicial (até 7 dias) se adapta ao volume e fica guardado por pesquisa.
+
+**Mês inicial.** A API não informa quando a pesquisa começou (`first_evaluation_date_cache` e `created_at` não saem no serializer da V1), então o usuário escolhe o primeiro mês que interessa na primeira consulta. O valor fica no cache da credencial (`meta.start_month`). `Syncer.ensure`, por onde passam `query`, a comparação, `comments` e `sync`, recusa a chamada sem ele (`start_month_required`) e recusa período que comece antes dele (`period_before_start`), antes de qualquer requisição de avaliações.
+
+**Atualização incremental por `created_at`.** Para os dias recentes já baixados, o motor pede só o que o servidor recebeu depois do download mais antigo entre eles (`search_date_scope=received_at`, janela em UTC, com 5 minutos de folga), descarta o que já está no cache (`eval_ref`) e acrescenta o restante aos dias de `started_at` correspondentes. Isso também pega a avaliação atrasada de totem offline, cujo `started_at` é de dias atrás. Volta ao download inteiro por dia quando a janela passa de 7 dias ou quando a API falha em algum trecho dela.
+
+Limites assumidos:
+- A API escolhe os shards pelas datas da janela, e cada avaliação fica no shard do mês do seu `started_at`. Uma avaliação recebida agora com `started_at` num shard antigo não aparece na busca por `created_at`. Os shards antigos quase não recebem dados novos, e a decisão foi ignorar esse caso. Dias antigos continuam sendo relidos por inteiro a cada 7 dias.
+- Tags aplicadas depois a avaliações que já estão no cache só entram na releitura por inteiro do dia.
+- Uma janela vazia não é conferida dia a dia, como na busca por `started_at`. Se uma avaliação que não monta zerar a janela, ela some até a releitura por inteiro do dia.
 
 Orçamento de tempo: cada execução baixa por até 90 s (abaixo do tempo limite de comando dos hosts) e devolve `sync_incomplete`; a execução seguinte continua.
 

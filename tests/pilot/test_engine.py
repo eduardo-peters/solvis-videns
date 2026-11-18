@@ -40,6 +40,7 @@ class EngineTest(unittest.TestCase):
             "SOLVIS_TODAY": "2026-11-17",
         })
         self.env.start()
+        self.ok("config", "--start-month", "2025-01")
         self.mark = len(self.fake.requests)
 
     def tearDown(self):
@@ -93,7 +94,7 @@ class EngineTest(unittest.TestCase):
         reqs = self.new_requests()
         self.assertTrue(all(r["ua"] == USER_AGENT for r in reqs))
         for r in self.fake.evaluation_requests():
-            self.assertNotIn("search_date_scope", r["params"])
+            self.assertIn(r["params"].get("search_date_scope"), (None, "received_at"))
             self.assertNotIn("reliable", r["params"])
             self.assertTrue(r["params"]["end_date"].endswith("23:59:59") or r["params"]["end_date"][-2:].isdigit())
         self.assertFalse([r for r in reqs if r["method"] == "POST" and "sentiments" in r["path"]])
