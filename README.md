@@ -2,7 +2,9 @@
 
 Skill de análise de resultados de pesquisas da plataforma Solvis, para clientes usarem nas próprias LLMs.
 
-> **Status: rascunho de planejamento (v0.1.0-draft).** A skill depende da API Analytics v1, que ainda não existe no `survey_system`. Nada aqui deve ser entregue a cliente antes da Fase 2 do [plano](docs/PLAN.md).
+> **Status:** duas versões convivem neste repositório.
+> - **`solvis-survey-analysis-pilot` (v0.2.0-pilot), utilizável hoje.** Funciona sobre a API pública V1, sem mudança no backend: um motor local em Python calcula as métricas com as regras das telas. Ver [docs/pilot/README.md](docs/pilot/README.md).
+> - **`solvis-survey-analysis` (v0.1.0-draft), plano principal.** Depende da API Analytics v1, que ainda não existe no `survey_system`. Nada dela deve ser entregue a cliente antes da Fase 2 do [plano](docs/PLAN.md).
 
 ## O que é
 
@@ -20,10 +22,12 @@ LLM do cliente
 
 | Caminho | Conteúdo | Vai para o cliente? |
 |---|---|---|
+| `skills/solvis-survey-analysis-pilot/` | Skill do piloto: `SKILL.md`, `references/` e o motor `scripts/solvis.py` (API pública V1, Python 3.9+, sem dependências) | Sim, no piloto |
 | `skills/solvis-survey-analysis/` | A skill no padrão [Agent Skills](https://agentskills.io/specification): `SKILL.md`, `references/` (modelo semântico e regras) | Sim, como artefato de release |
 | `api/openapi.analytics.v1.yaml` | Contrato proposto da API Analytics v1 | Sim, quando a API existir (versão publicada) |
-| `evals/` | Casos de avaliação da skill (perguntas, chamadas esperadas, armadilhas) | Não |
-| `docs/` | Plano, arquitetura, decisões (ADRs), requisitos para o backend, distribuição, perguntas em aberto | Não |
+| `evals/` | Casos de avaliação da skill (perguntas, chamadas esperadas, armadilhas); `cases-pilot.yaml` para o piloto | Não |
+| `tests/pilot/` | Testes do motor do piloto com uma API V1 falsa | Não |
+| `docs/` | Plano, arquitetura, decisões (ADRs), requisitos para o backend, distribuição, perguntas em aberto; `docs/pilot/` para o piloto | Não |
 
 Este repositório é privado. O que chega ao cliente é o artefato de release montado a partir de `skills/` (e, depois, o pacote do servidor MCP). Ver [docs/distribution.md](docs/distribution.md).
 

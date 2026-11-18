@@ -1,0 +1,82 @@
+# Modelo semântico do piloto: recortes (group_by) e filtros
+
+model_version: "pilot-1.0.0"
+
+time_basis: >
+  Todo recorte de tempo usa started_at, a HORA LOCAL DA UNIDADE no início da avaliação. A API
+  pública o envia com sufixo "Z", mas o valor não é UTC: não converter. "Outubro" são os dias
+  locais de 1 a 31 de outubro, inclusivos.
+today: "Data atual no fuso de São Paulo."
+
+dimensions:
+  - id: unit
+    usage: [group_by, filter (--unit)]
+    semantics: "Unidade onde a avaliação foi coletada. Unidades sem avaliação no período não aparecem."
+
+  - id: unit_property
+    usage: [group_by (unit_property:<id do nome>), filter (--property-value)]
+    examples: [regional, bandeira, formato, tamanho da loja]
+    semantics: >
+      Atributo nome → valor do cadastro ATUAL da unidade, sem hierarquia, um valor por unidade e nome.
+      O resultado de um valor é o agregado das unidades que hoje têm aquele valor; se uma loja mudou de
+      regional, todo o histórico dela aparece na regional nova. Unidades sem o atributo ficam em value null.
+    filter_rule: "Vários valores do mesmo nome = OU; nomes diferentes = E."
+
+  - id: unit_state
+    usage: [group_by]
+    semantics: "UF do cadastro atual. FB = exterior, IT = itinerante, WB = web sem estado."
+
+  - id: time_bucket
+    usage: [group_by]
+    values: [day, week, month, quarter]
+    semantics: "Semana ISO (segunda a domingo). Mês e trimestre de calendário."
+    notes:
+      - "Baldes em andamento ou cortados pelo período vêm marcados em rows[].bucket."
+      - "Com recorte de tempo, comparar só com previous_year (o motor casa mês com mês do ano anterior)."
+
+  - id: day_of_week
+    usage: [group_by]
+    semantics: "Dia local da unidade (mon..sun)."
+
+  - id: hour_block
+    usage: [group_by (hour_block[:horas])]
+    sizes: [1, 2, 3, 4, 6, 8, 12]
+    default: 6
+    semantics: "Faixa de hora local do início da avaliação, ex.: 18-24."
+
+  - id: channel
+    usage: [group_by, filter]
+    values: {device: "totem/tablet", web: "link, QR code, e-mail, WhatsApp"}
+
+  - id: completion
+    usage: [group_by, filter]
+    values: {completed: "respondeu até o fim", incomplete: "parou no meio"}
+    default_filter: all
+
+  - id: reliability
+    usage: [group_by, filter]
+    values: {reliable: "aprovada pelo Data Quality", unreliable: "reprovada", unclassified: "não verificada"}
+    default_filter: all
+    notes:
+      - "Só existe em pesquisa com Data Quality ligado."
+      - "Nas telas, quem não tem permissão de gerenciar confiabilidade vê só reliable; com a permissão, vê tudo."
+
+  - id: nps_group
+    usage: [group_by (nps_group[:<id>]), filter (--nps-group + --reference-question)]
+    values: {promoter: "9-10", passive: "7-8", detractor: "0-6"}
+    semantics: "Grupo do respondente numa pergunta NPS de referência da mesma avaliação. Avaliações sem essa resposta ficam em null."
+
+  - id: reference_choice
+    usage: [group_by (choice:<id da pergunta>), filter (--choice-filter)]
+    semantics: "Alternativa que a mesma avaliação marcou em outra pergunta (ex.: NPS por faixa etária)."
+    notes:
+      - "Se a pergunta de referência for de múltipla resposta, uma avaliação entra em várias linhas e elas não somam o total."
+
+  - id: tag
+    usage: [filter (--tag)]
+    semantics: "Avaliações com a tag em qualquer pergunta (OU entre tags). Tag-pai não inclui subtags."
+
+limits:
+  group_by_max: 2
+  period_max_days: 731
+  rows_max: 500

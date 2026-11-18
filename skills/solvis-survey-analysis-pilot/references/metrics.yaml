@@ -1,0 +1,175 @@
+# Modelo semântico do piloto: métricas
+# Calculadas pelo motor local (scripts/solvis_pilot/measures.py) com as fórmulas das telas de
+# resultados do survey_system. Este arquivo explica o que cada uma significa; ele NÃO autoriza a
+# LLM a calcular nada.
+
+model_version: "pilot-1.0.0"
+derived_from: "survey_system@f594c4a6; API pública V1"
+
+conventions:
+  n: "Tamanho da amostra da linha. Cada métrica define o que conta em n. Sempre citar n junto do valor."
+  pooling: >
+    Agregar grupos (rede, regional, "todas as unidades", vários meses) é somar as contagens e
+    recalcular. Nunca média dos valores das linhas. O motor entrega esse agregado em `totals`.
+  current_questionnaire: >
+    Textos de pergunta e alternativa e valores numéricos das alternativas vêm do cadastro ATUAL da
+    pesquisa, para todo o histórico, como nas telas.
+  rounding: "Usar `display`. Não rearredondar."
+  default_inclusion: >
+    Por padrão entram avaliações incompletas, de totem e web, e, em pesquisa com Data Quality,
+    também as reprovadas e não verificadas. Filtros mudam isso e aparecem em `policies`/`filters`.
+
+metrics:
+
+  - id: evaluation_count
+    label: {pt: "Avaliações", en: "Evaluations", es: "Evaluaciones"}
+    question: none
+    definition: "Número de avaliações (sessões de resposta) cujo início cai no período. Sem deduplicação por pessoa."
+    n: "igual ao valor"
+    pitfalls:
+      - "Avaliações ≠ respostas a uma pergunta (use response_count)."
+      - "Não é taxa de resposta: não existe o número de convidados ou visitantes."
+      - "Não é número de clientes únicos."
+
+  - id: response_count
+    label: {pt: "Respostas à pergunta", en: "Responses to question", es: "Respuestas a la pregunta"}
+    question: required
+    applies_to: "todos os tipos"
+    definition: "Quantas avaliações têm resposta para a pergunta no período."
+    by_type:
+      NPS: "nota de 0 a 10"
+      Scale / Multiple Choice: "qualquer alternativa atual, inclusive 'Não se aplica'"
+      Multiple Response: "avaliações com alguma linha na pergunta, inclusive quem deixou em branco quando permitido"
+      abertas e pessoais: "resposta não vazia"
+    pitfalls:
+      - "O n cai ao longo do questionário: incompletas param no meio e desvios pulam perguntas."
+
+  - id: nps
+    label: {pt: "NPS", en: "NPS", es: "NPS"}
+    question: required
+    applies_to: [NPS]
+    definition: "% de promotores (9-10) menos % de detratores (0-6), de -100 a 100. Neutros: 7-8."
+    formula: "round(100.0 × (P/n − D/n)) em ponto flutuante, como as telas (empates podem ir para perto do zero)"
+    n: "respostas com nota 0..10"
+    breakdown: [promoters, passives, detractors, promoters_pct, passives_pct, detractors_pct]
+    null_when: "n = 0 (display '-')"
+    delta: "pontos de NPS; delta também traz a variação em p.p. de cada grupo"
+    reference_zone: >
+      Vem no envelope quando a pergunta tem zona configurada: Crítica (≤ 0), Aperfeiçoamento (1-50),
+      Qualidade (51-75), Excelência (76-100, ou 76-90 com Encantamento), Encantamento (91-100).
+    pitfalls:
+      - "Explicar variação pelas porcentagens, não pelas contagens."
+      - "Pesquisa com duas perguntas NPS tem dois NPS. Não juntar."
+      - "Não comparar com 'NPS de mercado'."
+
+  - id: scale_mean
+    label: {pt: "Média da escala", en: "Scale average", es: "Promedio de la escala"}
+    question: required
+    applies_to: [Scale]
+    not_for: "perguntas com metric_kind = weighted_sum"
+    definition: "Média dos valores das alternativas escolhidas."
+    formula: "Σ(contagem × valor) / Σ(contagem), só alternativas com valor"
+    n: "respostas a alternativas com valor (sem 'Não se aplica')"
+    breakdown: [scale_min, scale_max, valueless_answers, answered_including_valueless]
+    display: "casas pela amplitude: < 10 → 2; < 100 → 1; senão 0. Escala 0..100 com %"
+    pitfalls:
+      - "Dizer sempre a escala (ex.: 4,25 numa escala de 1 a 5)."
+      - "Não comparar médias de escalas diferentes."
+      - "Em escala 0..100 a média sai com %, como nas telas; é a média dos valores, não % de satisfeitos."
+      - "Os valores são os cadastrados, que podem não seguir os rótulos (ex.: 'Muito bom' valendo 50). Leia os valores no questionnaire antes de interpretar."
+
+  - id: weighted_sum
+    label: {pt: "Soma ponderada", en: "Weighted sum", es: "Suma ponderada"}
+    question: required
+    applies_to: [Scale]
+    only_for: "perguntas com metric_kind = weighted_sum"
+    definition: "Indicador das escalas configuradas como soma ponderada: 100 × média. Com valores 0 e 1, é o % de respostas na alternativa de valor 1."
+    formula: "round(Σ(100 × contagem/n × valor))"
+    display: "inteiro; com % quando a faixa ×100 é 0..100"
+    pitfalls:
+      - "Não é média. Não misturar com scale_mean."
+
+  - id: choice_share
+    label: {pt: "Distribuição das alternativas", en: "Choice distribution", es: "Distribución de alternativas"}
+    question: required
+    applies_to: [Multiple Choice, Scale]
+    definition: "Parte das respostas que escolheu cada alternativa."
+    formula: "chosen / answered"
+    n: "answered = todas as respostas da pergunta, inclusive alternativas sem valor"
+    sums_to: "100%"
+    pitfalls:
+      - "Em escala, 'Não se aplica' entra aqui e não entra na média."
+      - "'Outro: ___' conta como a própria alternativa; o texto sai em comments."
+
+  - id: choice_set_share
+    label: {pt: "Parte num conjunto de alternativas", en: "Choice-set share", es: "Parte en un conjunto de alternativas"}
+    question: required
+    applies_to: [Multiple Choice, Scale]
+    definition: "Parte das respostas cujas alternativas estão no conjunto informado (--choices)."
+    formula: "Σ chosen(conjunto) / answered"
+    use_for: "o que o cliente chama de top-2-box, % satisfeitos ou CSAT"
+    pitfalls:
+      - "Declarar quais alternativas formam o conjunto e que o nome ('CSAT') é do cliente, não do sistema."
+
+  - id: multi_response_share
+    label: {pt: "Distribuição de múltipla resposta", en: "Multiple-response distribution", es: "Distribución de respuesta múltiple"}
+    question: required
+    applies_to: [Multiple Response]
+    definition: "Parte das avaliações que marcou cada alternativa."
+    formula: "avaliações que marcaram / avaliações com linha na pergunta (inclusive em branco)"
+    sums_to: "pode passar de 100%"
+    pitfalls:
+      - "Nunca somar as porcentagens nem dizer que somam 100%."
+
+  - id: tag_mentions
+    label: {pt: "Menções de tags", en: "Tag mentions", es: "Menciones de etiquetas"}
+    question: optional
+    definition: >
+      Para cada tag, quantos comentários (pares avaliação × pergunta) têm a tag, e que parte dos
+      comentários com alguma tag isso representa. Tags são aplicadas por pessoas na Solvis ou pelo
+      Radar de Comentários.
+    formula: "mentions / tagged_comments"
+    n: "tagged_comments = comentários com ao menos uma tag"
+    context: "text_responses = respostas abertas não vazias no mesmo recorte"
+    sums_to: "pode passar de 100% (um comentário pode ter várias tags)"
+    pitfalls:
+      - "A base não é 'todos os comentários': diga a parte com tag (tagged_share_display)."
+      - "Tags são o que foi marcado, não causa provada."
+      - "Tag-pai não inclui subtags."
+      - "Não é o theme_mentions do Radar: a API pública não diz quais comentários o Radar analisou."
+
+  - id: data_quality_summary
+    label: {pt: "Qualidade de dados", en: "Data quality", es: "Calidad de datos"}
+    question: none
+    requires: "pesquisa com Data Quality ligado"
+    definition: "Avaliações confiáveis, reprovadas e não verificadas no período."
+    breakdown: [reliable, unreliable, unclassified, reliable_pct, unreliable_pct, unclassified_pct]
+    pitfalls:
+      - "Não verificada não é confiável."
+      - "Em geral só avaliações de totem passam pelo Data Quality; as web ficam não verificadas."
+      - "Reprovada é padrão suspeito apontado por regras automáticas, não fraude comprovada."
+      - "Quais regras falharam não sai na API pública."
+
+not_available:
+  - id: csat
+    reason: "Não há métrica CSAT. Usar scale_mean, weighted_sum ou choice_set_share da pergunta que o cliente chama de CSAT e declarar o mapeamento."
+  - id: ces
+    reason: "Não há métrica de esforço. Mesmo tratamento do CSAT."
+  - id: response_rate
+    reason: "Não há denominador (convidados, visitantes, envios)."
+  - id: abandonment_rate
+    reason: "Não há métrica de abandono. Pode-se dar evaluation_count por completion, sem chamar de taxa."
+  - id: numeric_mean
+    reason: "Perguntas Numeric não têm agregação no sistema."
+  - id: comment_tone
+    reason: "O tom do Radar não sai na API pública V1. Oferecer tag_mentions e comments."
+  - id: theme_mentions
+    reason: "A base de comentários analisados pelo Radar não sai na API pública. Oferecer tag_mentions."
+  - id: radar_summary_gut
+    reason: "Resumo, sugestão e matriz GUT do Radar não saem na API pública."
+  - id: shift
+    reason: "Turno não sai na API pública. Oferecer hour_block."
+  - id: market_benchmark
+    reason: "A base não tem dados de mercado nem de outros clientes."
+  - id: forecast
+    reason: "O motor não projeta valores futuros."
