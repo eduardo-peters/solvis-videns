@@ -5,5 +5,6 @@ __pycache__/
 .env
 *.local.*
 # relatórios internos e dados de cliente nunca entram neste repositório
+# exceção registrada: branch slm-trainning tem resultados agregados do Assaí no protótipo (ver aviso no README)
 pesquisa/
 *ACHADOS*

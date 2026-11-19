@@ -1,0 +1,17 @@
+{
+  "version": "v2",
+  "status": "dados prontos; treino pendente",
+  "date": "2026-11-19",
+  "changes_from_v1": [
+    "volume_no_survey (50): volume por loja ou pesquisa com group_by, sem inventar pesquisa",
+    "volume_not_nps (30): 'quantas avaliações' é evaluation_count, nunca o n do NPS",
+    "distribution_read (50): ler choice_share citando cada alternativa com % e n"
+  ],
+  "data": {"generator": "agent/train/build_dataset.py --version v2", "seed": 20261119, "conversations": 482,
+           "train_examples": 804, "valid_examples": 85, "train_sha": "45271be1ac26"},
+  "training_planned": {"base": "mlx-community/Qwen3-1.7B-4bit", "iters": "a definir (v1 usou 200 = 0,35 época)",
+                       "command": "python3 agent/train/train.py --version v2"},
+  "evaluation_planned": {"compare": ["base MLX", "v1", "v2", "agente no Ollama (referência)"],
+                         "decides": "holdout (agent/eval_baseline.py --set holdout)"},
+  "known_risks": ["paráfrases próximas das perguntas dev de volume: ganho no dev pode ser memorização; decidir pelo holdout"]
+}

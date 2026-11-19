@@ -1,0 +1,35 @@
+{
+  "version": "2026-11-19",
+  "description": "Catálogo de metadados semânticos: o que a IA precisa saber sobre o dado para usá-lo corretamente. Fonte única para a tool metadata_catalog, para docs/tools.md e para as checagens de ops/pipeline.py. Status: testing (no protótipo), engine (só no motor do piloto), inferred (deduzido pelo código), missing (não existe no produto). Novos campos da operação entram aqui.",
+  "fields": [
+    {"level": "survey", "field": "survey_id, name", "purpose": "Resolver o nome dito pelo usuário", "status": "testing", "source": "raw.surveys", "owner": "engenharia", "skill": "INV-11", "check": null},
+    {"level": "survey", "field": "archived, last_evaluation_date", "purpose": "Não sugerir pesquisa encerrada; detectar falha silenciosa", "status": "testing", "source": "raw.surveys", "owner": "engenharia", "skill": "INV-24", "check": null},
+    {"level": "survey", "field": "questionnaire_version", "purpose": "Avisar que o histórico usa o cadastro atual", "status": "engine", "source": "API V1 (fora do ClickHouse)", "owner": "engenharia", "skill": "INV-10", "check": null},
+    {"level": "survey", "field": "data_quality (reliable)", "purpose": "Avisar sobre avaliações não verificadas", "status": "testing", "source": "raw.evaluations.dq, reliable", "owner": "engenharia", "skill": "INV-22", "check": null},
+    {"level": "survey", "field": "finalidade e público", "purpose": "Interpretar o resultado no contexto certo", "status": "missing", "source": "endpoint de contexto (a criar)", "owner": "CX", "skill": null, "check": "surveys_without_context"},
+    {"level": "survey", "field": "contexto por unidade", "purpose": "Explicar variações locais em análises com várias unidades", "status": "missing", "source": "endpoint de contexto (a criar)", "owner": "CX", "skill": null, "check": "surveys_without_context"},
+    {"level": "survey", "field": "sucessão (substitui, substituída por)", "purpose": "Não somar nem comparar V1 e V2 sem saber", "status": "missing", "source": "não existe", "owner": "produto", "skill": "INV-04", "check": null},
+    {"level": "survey", "field": "pergunta NPS principal", "purpose": "Escolher a NPS certa quando há mais de uma", "status": "inferred", "source": "única NPS da pesquisa", "owner": "CX", "skill": "INV-04", "check": null},
+
+    {"level": "question", "field": "question_id, number, text, answer_type", "purpose": "Resolver a pergunta; escolher a métrica", "status": "testing", "source": "raw.questions", "owner": "engenharia", "skill": "question-types.md", "check": null},
+    {"level": "question", "field": "choice_id, letra, texto, valor", "purpose": "Distribuição e média; 'Não se aplica' sem valor", "status": "testing", "source": "raw.choices", "owner": "engenharia", "skill": "INV-05", "check": null},
+    {"level": "question", "field": "question_id em cada resposta", "purpose": "Atribuir a resposta à pergunta certa", "status": "inferred", "source": "motor do piloto (API V1 não envia)", "owner": "engenharia", "skill": "INV-16", "check": "questions_repeated_text"},
+    {"level": "question", "field": "código semântico (ex.: atendimento_caixa)", "purpose": "Comparar a mesma pergunta entre pesquisas e versões", "status": "missing", "source": "não existe", "owner": "produto", "skill": "INV-04", "check": null},
+    {"level": "question", "field": "tema", "purpose": "Agrupar perguntas para panorama", "status": "missing", "source": "não existe", "owner": "CX", "skill": null, "check": null},
+    {"level": "question", "field": "métrica recomendada (metric_kind)", "purpose": "Não calcular média em pergunta de soma ponderada", "status": "engine", "source": "motor do piloto", "owner": "engenharia", "skill": "INV-06", "check": null},
+    {"level": "question", "field": "versão em que entrou e saiu", "purpose": "Comparação histórica honesta", "status": "missing", "source": "não existe", "owner": "produto", "skill": "INV-10", "check": null},
+    {"level": "question", "field": "lgpd_protected", "purpose": "Nunca expor texto pessoal", "status": "engine", "source": "motor do piloto; texto pessoal não vai ao ClickHouse", "owner": "engenharia", "skill": "INV-28", "check": null},
+
+    {"level": "unit", "field": "unit_id, nome, código, cidade, UF", "purpose": "Resolver a loja; recorte por UF", "status": "testing", "source": "raw.units", "owner": "engenharia", "skill": "INV-13", "check": "units_invalid_uf"},
+    {"level": "unit", "field": "propriedades (Regional, Formato, HUB...)", "purpose": "Recortes de gestão", "status": "testing", "source": "raw.unit_properties (valor atual)", "owner": "CX", "skill": "INV-13", "check": "units_without_properties"},
+    {"level": "unit", "field": "vigência das propriedades", "purpose": "Loja que trocou de regional não leva o passado junto", "status": "missing", "source": "não existe", "owner": "produto", "skill": "INV-13", "check": null},
+    {"level": "unit", "field": "tipo (loja, canal, fictícia)", "purpose": "Tirar canais e unidades fictícias de rankings", "status": "missing", "source": "não existe", "owner": "CX", "skill": "INV-23", "check": "units_not_stores"},
+    {"level": "unit", "field": "status com datas (ativa, fechada, reforma)", "purpose": "Explicar queda de volume", "status": "missing", "source": "não existe", "owner": "CX", "skill": "INV-24", "check": null},
+    {"level": "unit", "field": "natureza da propriedade (recorte ou identificador)", "purpose": "Não usar 'Número da Loja' como recorte", "status": "inferred", "source": "mais de 100 valores = identificador", "owner": "engenharia", "skill": null, "check": "property_used_as_identifier"},
+
+    {"level": "tag", "field": "tags aplicadas por avaliação", "purpose": "Temas mais citados", "status": "engine", "source": "motor do piloto (fora do ClickHouse)", "owner": "engenharia", "skill": "INV-08", "check": null},
+    {"level": "tag", "field": "hierarquia, definição e rollup", "purpose": "Tag-pai incluir ou não subtags", "status": "missing", "source": "não existe (hoje não inclui)", "owner": "produto", "skill": "INV-15", "check": null},
+    {"level": "tag", "field": "origem (pessoa ou Radar)", "purpose": "Pesar a confiança do tema", "status": "missing", "source": "API V1 não informa", "owner": "engenharia", "skill": "INV-27", "check": null},
+    {"level": "tag", "field": "comentários mascarados + embeddings", "purpose": "Busca de trechos e temas parecidos", "status": "missing", "source": "aguarda autorização para carregar texto", "owner": "engenharia", "skill": "INV-26", "check": null}
+  ]
+}

@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solvis · Como uma pergunta vira resposta (protótipo local)</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a3340; --text:#e6edf3; --muted:#8b97a6;
+    --user:#58a6ff; --model:#bc8cff; --code:#3fb950; --ch:#f0b72f; --guard:#ff7b72; --vec:#39c5cf;
+    --r:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 24px 80px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.3px}
+  h2{font-size:21px;margin:56px 0 6px;letter-spacing:-.2px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:600;border:1px solid}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 8px}
+  .p-user{color:var(--user);border-color:var(--user)} .p-model{color:var(--model);border-color:var(--model)}
+  .p-code{color:var(--code);border-color:var(--code)} .p-ch{color:var(--ch);border-color:var(--ch)}
+  .p-guard{color:var(--guard);border-color:var(--guard)} .p-vec{color:var(--vec);border-color:var(--vec)}
+
+  /* arquitetura */
+  .arch{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;position:relative}
+  .box h3{margin:0 0 4px;font-size:15px}
+  .box p{margin:0;color:var(--muted);font-size:13.5px}
+  .box .port{position:absolute;top:12px;right:12px;color:var(--muted);font-size:11.5px}
+  .b-user{border-top:3px solid var(--user)} .b-code{border-top:3px solid var(--code)}
+  .b-model{border-top:3px solid var(--model)} .b-ch{border-top:3px solid var(--ch)}
+  .lock{margin-top:14px;background:linear-gradient(90deg,#1f2a1f,#161b22);border:1px dashed #3fb95066;border-radius:var(--r);padding:12px 16px;color:#b6e3bd;font-size:13.5px}
+
+  /* passo a passo */
+  .flow{position:relative;margin-top:22px}
+  .flow:before{content:"";position:absolute;left:27px;top:8px;bottom:8px;width:2px;background:linear-gradient(var(--user),var(--model),var(--code),var(--ch),var(--guard),var(--user))}
+  .step{display:grid;grid-template-columns:56px 1fr;gap:16px;margin-bottom:18px;position:relative}
+  .dot{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:18px;background:var(--panel2);border:2px solid;z-index:1}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+  .card h3{margin:0 0 6px;font-size:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .card p{margin:6px 0;color:#c9d3dd}
+  .card ul{margin:6px 0 0;padding-left:18px;color:#c9d3dd}
+  .card li{margin:3px 0}
+  .ex{margin-top:10px;background:#0b0f14;border:1px solid var(--line);border-radius:10px;padding:10px 12px;white-space:pre-wrap;color:#c9d3dd;overflow-x:auto}
+  .ex .k{color:var(--muted)} .ex .g{color:var(--code)} .ex .y{color:var(--ch)} .ex .r{color:var(--guard)} .ex .b{color:var(--user)} .ex .m{color:var(--model)}
+
+  /* guardrails */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+  .g{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--guard);border-radius:var(--r);padding:14px 16px}
+  .g h4{margin:0 0 4px;font-size:14.5px}
+  .g p{margin:0;color:var(--muted);font-size:13.5px}
+  .g .catch{margin-top:8px;font-size:12.5px;color:#ffa198}
+
+  /* tabelas */
+  table{width:100%;border-collapse:collapse;margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+  th{color:var(--muted);font-weight:600;background:var(--panel2)}
+  tr:last-child td{border-bottom:0}
+  .ok{color:var(--code);font-weight:600} .no{color:var(--guard);font-weight:600} .warn{color:var(--ch);font-weight:600}
+
+  /* barras */
+  .bars{margin-top:16px;display:grid;gap:10px}
+  .bar{display:grid;grid-template-columns:260px 1fr 60px;align-items:center;gap:12px;font-size:13.5px}
+  .track{height:14px;background:var(--panel2);border-radius:7px;overflow:hidden;border:1px solid var(--line)}
+  .fill{height:100%;border-radius:7px}
+  .note{color:var(--muted);font-size:13px;margin-top:10px}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+  footer{margin-top:64px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+  @media (max-width:860px){.arch,.grid3,.split{grid-template-columns:1fr}.bar{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Como uma pergunta vira resposta</h1>
+  <p class="sub">Protótipo local da Solvis: camada semântica no ClickHouse + modelo pequeno rodando na máquina. Atualizado em 19/11/2026. Dados reais do Assaí (17/11/2026, 11.709 avaliações), só em <code>127.0.0.1</code>.</p>
+
+  <div class="legend">
+    <span class="pill p-user">Usuário / tela</span>
+    <span class="pill p-model">Modelo (Ollama)</span>
+    <span class="pill p-code">Código determinístico</span>
+    <span class="pill p-ch">ClickHouse</span>
+    <span class="pill p-vec">Busca vetorial</span>
+    <span class="pill p-guard">Guardrail</span>
+  </div>
+
+  <!-- ===================================================== -->
+  <h2>1. As peças</h2>
+  <p class="sub">Quatro processos na mesma máquina. Nenhum aceita conexão de fora.</p>
+  <div class="arch">
+    <div class="box b-user"><span class="port mono">:8080</span>
+      <h3>Tela no navegador</h3>
+      <p><code>agent/server.py</code>. Terminal preto: conversa, chamadas feitas, tabela, gráfico e selo de conferência.</p></div>
+    <div class="box b-code">
+      <h3>Agente</h3>
+      <p><code>agent/agent.py</code>. Laço de conversa, ferramentas fixas, resolução de nomes, períodos e tipos, guardrails.</p></div>
+    <div class="box b-model"><span class="port mono">:11434</span>
+      <h3>Ollama</h3>
+      <p><code>qwen3:1.7b</code> conversa e escolhe a ferramenta. <code>nomic-embed-text</code> gera embeddings.</p></div>
+    <div class="box b-ch"><span class="port mono">:8123</span>
+      <h3>ClickHouse</h3>
+      <p>Views semânticas (as métricas), catálogo, regras da skill vetorizadas. Usuário <code>assai_agent</code> isolado.</p></div>
+  </div>
+  <div class="lock">🔒 O agente consulta como <code>assai_agent</code>: uma <em>row policy</em> limita tudo a <code>client_id = 1</code>, ele não lê <code>raw.answers</code> (respostas individuais) e de <code>raw.evaluations</code> vê só pesquisa, dia e unidade. Teste: com um segundo cliente inserido, o agente viu 0 linhas dele.</div>
+
+  <!-- ===================================================== -->
+  <h2>2. Uma pergunta, passo a passo</h2>
+  <p class="sub">Exemplo real: <em>"Qual a pior loja em NPS ontem na pesquisa Satisfação?"</em></p>
+
+  <div class="flow">
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--user);color:var(--user)">1</div>
+      <div class="card">
+        <h3>Pergunta chega <span class="pill p-user">tela</span></h3>
+        <p>A tela manda as últimas 12 mensagens da conversa para <code>POST /ask</code>. Nada vai para fora da máquina.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--code);color:var(--code)">2</div>
+      <div class="card">
+        <h3>Leitura do pedido pelo código <span class="pill p-code">código</span></h3>
+        <p>Antes de o modelo ver a pergunta, o código extrai o que não pode depender dele:</p>
+        <ul>
+          <li><b>Período dito:</b> "ontem" → <code>yesterday</code>; "março de 2025" → <code>month:2025-03</code>. Usado se o modelo esquecer de passar.</li>
+          <li><b>Capacidades que não existem:</b> CSAT, comparação de períodos, comentários e múltipla resposta. Se aparecerem, o aviso vai para o modelo e, garantido, para a resposta.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--vec);color:var(--vec)">3</div>
+      <div class="card">
+        <h3>Regras da skill recuperadas <span class="pill p-vec">busca vetorial</span> <span class="pill p-ch">ClickHouse</span></h3>
+        <p>A pergunta vira um embedding (<code>nomic-embed-text</code>). O ClickHouse devolve os trechos mais próximos dos 41 trechos da skill do piloto (<code>semantic.skill_chunks</code>, <code>cosineDistance</code>), até 3.000 caracteres.</p>
+        <div class="ex"><span class="k">-- trechos para "pior loja em NPS"</span>
+<span class="y">0.37</span>  SKILL.md · Quando perguntar e quando recusar
+<span class="y">0.37</span>  answer-format.md · Modelo curto (pergunta direta)
+<span class="y">0.45</span>  playbooks.md · 3. Ranking de unidades</div>
+        <p class="note">Só texto da skill é vetorizado, nenhum dado de cliente. Pode ser desligado com <code>AGENT_CONTEXT=0</code>.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--model);color:var(--model)">4</div>
+      <div class="card">
+        <h3>Modelo escolhe a ferramenta <span class="pill p-model">qwen3:1.7b</span></h3>
+        <p>O modelo recebe as regras, os trechos e 8 ferramentas. Ele <b>não escreve SQL, não calcula e não usa ids</b>: passa nomes como o usuário disse.</p>
+        <div class="ex"><span class="m">nps</span>(survey=<span class="b">"Satisfação"</span>, group_by=<span class="b">"unit"</span>, min_n=<span class="b">30</span>, period=<span class="b">"yesterday"</span>)</div>
+        <p class="note">Se ele escrever a chamada como texto em vez de usar <code>tool_calls</code>, ou errar o nome da ferramenta, o código reconhece e corrige.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--code);color:var(--code)">5</div>
+      <div class="card">
+        <h3>Nomes viram ids, sem adivinhação <span class="pill p-code">código</span></h3>
+        <ul>
+          <li><b>Pesquisa:</b> "Satisfação" → <code>40851</code>, ativas primeiro.</li>
+          <li><b>Pergunta:</b> sem pergunta citada e uma só NPS na pesquisa → <code>1607201</code>. Em média e distribuição, procura primeiro entre as perguntas do tipo certo.</li>
+          <li><b>Propriedade:</b> "Regional" → <code>691</code>.</li>
+          <li><b>Período:</b> <code>yesterday</code> → <code>2026-11-17</code> a <code>2026-11-17</code>.</li>
+        </ul>
+        <div class="ex"><span class="k">-- quando não dá para decidir, a pergunta volta para o usuário</span>
+<span class="r">ToolError</span>: pergunta 'Atendimento' é ambígua. Pergunte ao usuário qual destas: …
+<span class="r">ToolError</span>: A pergunta 2 ('Atendimento') é do tipo Scale: nps não existe para ela.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--ch);color:var(--ch)">6</div>
+      <div class="card">
+        <h3>ClickHouse calcula <span class="pill p-ch">views semânticas</span></h3>
+        <p>Cada ferramenta chama uma view parametrizada, com tipos fixos (<code>{survey:UInt32}</code>, <code>{start:Date}</code>). As fórmulas são as das telas: NPS por contagens, média sem "Não se aplica", distribuição com N/A no denominador.</p>
+        <div class="ex"><span class="g">SELECT</span> u.name, v.nps, v.n <span class="g">FROM</span> semantic.nps_by_unit(survey=40851, question=1607201, start='2026-11-17', end='2026-11-17') v …
+<span class="k">-- 114 unidades · 0,03 s · contagens pré-agregadas pela materialized view</span></div>
+        <p>O código monta o resultado: total (NPS 79, n 11.709), pior e melhor sobre <b>todas</b> as unidades, linhas com amostra pequena marcadas, 149 unidades abaixo de <code>min_n</code> escondidas, cobertura do período.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--model);color:var(--model)">7</div>
+      <div class="card">
+        <h3>Modelo escreve a resposta <span class="pill p-model">qwen3:1.7b</span></h3>
+        <p>Com o resultado em mãos, o modelo escreve no máximo três frases: número, n, período, pior e melhor. Resposta abaixo copiada da avaliação, sem edição.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--guard);color:var(--guard)">8</div>
+      <div class="card">
+        <h3>Guardrails conferem antes de mostrar <span class="pill p-guard">guardrails</span></h3>
+        <p>Cinco checagens (detalhe na seção 3). Se alguma falha, o modelo tem <b>uma</b> nova tentativa com a orientação do que corrigir. Se falhar de novo, a resposta é trocada por uma recusa honesta.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="dot" style="border-color:var(--user);color:var(--user)">9</div>
+      <div class="card">
+        <h3>Resposta na tela <span class="pill p-user">tela</span></h3>
+        <div class="ex"><span class="b">&gt; Qual a pior loja em NPS ontem na pesquisa Satisfação?</span>
+<span class="k">  ↳ nps {"survey":"Satisfação","group_by":"unit","min_n":30,"period":"yesterday"} → 30 linhas</span>
+A pior loja em NPS ontem na pesquisa Satisfação é a loja <b>234 - Fortaleza Tapioqueiras</b> com NPS de -3 (119 respostas).
+<span class="g">✓ números conferidos com o ClickHouse</span>   <span class="k">9,3 s</span></div>
+        <p class="note">Sem o filtro de amostra mínima, a "pior loja" seria uma com 2 respostas (NPS -100). A regra vem do playbook 3 da skill e virou código.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================================================== -->
+  <h2>3. Guardrails</h2>
+  <p class="sub">Cada um nasceu de uma falha real observada no teste.</p>
+  <div class="grid3">
+    <div class="g"><h4>Números com origem</h4><p>Todo número da resposta precisa aparecer no resultado de alguma ferramenta (ou na própria pergunta).</p><div class="catch">Pegou: NPS "12" inventado na primeira versão.</div></div>
+    <div class="g"><h4>Fundamentação</h4><p>Resposta afirmativa sem nenhuma ferramenta consultada é recusada. A nova tentativa sugere a chamada concreta.</p><div class="catch">Pegou: "Loja A" e "Pergunta de Satisfação", inventados e marcados como conferidos.</div></div>
+    <div class="g"><h4>Métrica pedida</h4><p>Pediu NPS, média ou distribuição e a resposta veio de outra métrica? Bloqueia.</p><div class="catch">Pegou: "pior loja em NPS" respondida com volume de respostas.</div></div>
+    <div class="g"><h4>Datas com origem</h4><p>Datas completas da resposta precisam vir dos resultados.</p><div class="catch">Pegou: "1 a 31/10/2026" copiado de um exemplo da skill.</div></div>
+    <div class="g"><h4>Tipo da pergunta</h4><p>NPS só em pergunta NPS; média só em escala. Erro explica qual métrica existe para ela.</p><div class="catch">Pegou: NPS calculado na pergunta de Atendimento (escala).</div></div>
+    <div class="g"><h4>Cobertura e capacidades</h4><p>Período com dias sem dados e pedidos sem suporte ganham aviso inserido pelo código, sem depender do modelo.</p><div class="catch">Pegou: "últimos 7 dias" respondido com 1 dia de dados, sem aviso.</div></div>
+  </div>
+
+  <!-- ===================================================== -->
+  <h2>3b. Auditoria e portão de qualidade</h2>
+  <p class="sub">Cada resposta passa por <code>_finish()</code>: checagens das regras da skill (INV-01, 02, 18, 23, 24, 25, 28) e registro no banco <code>ops</code> por um usuário que só insere.</p>
+  <div class="arch">
+    <div class="box b-ch"><h3>1. Saúde dos dados</h3><p>Paridade com o piloto, consistência da view, isolamento, índice da skill, UF, tipo de unidade, perguntas repetidas.</p></div>
+    <div class="box b-code"><h3>2. Testes sem LLM</h3><p>34 testes: 21 de guardrails (modelo trocado por roteiro, cada falha real) e 13 de tools e MCP. &lt; 1 s.</p></div>
+    <div class="box b-model"><h3>3-4. Avaliação e metodologia</h3><p>Casos com o modelo; regras da skill aplicadas em cada resposta; versão pelo hash do código.</p></div>
+    <div class="box b-user"><h3>5-6. Portão e revisão</h3><p>Reprova abaixo dos limites ou com regressão. Falhas de uso real viram candidatos, aprovados por uma pessoa.</p></div>
+  </div>
+  <div class="lock">🔁 Ajuste com aprovação: nenhuma mudança automática de prompt, código ou pesos. Falha real → candidato → revisão → caso novo + correção → portão. Detalhes em <a href="data-ops.md" style="color:#b6e3bd">data-ops.md</a>.</div>
+
+  <!-- ===================================================== -->
+  <h2>3c. Tools e MCP por perfil de agente</h2>
+  <p class="sub">A mesma biblioteca serve o agente local e qualquer host MCP (Kiro, Claude, Cursor). Cada perfil roda uma instância do servidor e vê só as próprias tools. Lista completa em <a href="tools.md" style="color:var(--user)">tools.md</a>, gerada do código.</p>
+  <div class="split">
+    <div class="card"><h3>analyst <span class="pill p-user">13 tools</span></h3>
+      <p>Métricas: <code>nps</code>, <code>scale_mean</code>, <code>choice_share</code>, <code>evaluation_count</code>. Catálogo: <code>list_surveys</code>, <code>list_questions</code>, <code>list_unit_properties</code>, <code>data_coverage</code>. Conhecimento: <code>describe_survey</code>, <code>metadata_catalog</code>, <code>explain_metric</code>, <code>skill_lookup</code>, <code>question_types</code>.</p></div>
+    <div class="card"><h3>data_engineer <span class="pill p-code">11 tools</span></h3>
+      <p>Metadados: <code>metadata_catalog</code>, <code>describe_survey</code>, <code>unit_metadata</code>. Qualidade: <code>data_health</code>, <code>methodology_rules</code>, <code>quality_status</code>. Skill: <code>explain_metric</code>, <code>skill_lookup</code>, <code>question_types</code>. Mais <code>list_surveys</code> e <code>data_coverage</code>. Não calcula métricas de negócio.</p></div>
+  </div>
+  <div class="lock">🔑 Três credenciais: <code>assai_agent</code> (métricas do cliente), <code>engineer_agent</code> (metadados e qualidade agregada; sem respostas individuais nem conversas), <code>agent_audit</code> (só grava auditoria). Nenhuma escreve dado; nenhuma tool aceita SQL do modelo. Como tudo se encaixa: <a href="engineering.md" style="color:#b6e3bd">engineering.md</a>.</div>
+
+  <!-- ===================================================== -->
+  <h2>4. De onde vêm os dados</h2>
+  <div class="split">
+    <div class="card">
+      <h3>Carga (hoje, protótipo)</h3>
+      <ul>
+        <li>API pública V1 → motor do piloto (<code>solvis.py</code>) → cache SQLite normalizado por <code>question_id</code>/<code>choice_id</code>, com privacidade na ingestão.</li>
+        <li><code>clickhouse/load_from_pilot_cache.py</code> copia ids, contagens e dimensões. Nenhum texto livre.</li>
+        <li>Materialized view → <code>semantic.answer_counts_daily</code> (contagens por dia, unidade, canal, confiabilidade).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Produção (proposta)</h3>
+      <ul>
+        <li>Espelho PeerDB dos shards no ClickHouse no lugar do cache do piloto. O resto do desenho fica igual.</li>
+        <li>Usuário e cota por cliente; custo medido no <code>system.query_log</code>.</li>
+        <li>Mesmas views servindo a skill, o MCP e a Olvi: o mesmo número em qualquer interface.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ===================================================== -->
+  <h2>5. Resultados medidos</h2>
+  <table>
+    <tr><th>Teste</th><th>Resultado</th></tr>
+    <tr><td>NPS total e por Regional: ClickHouse × motor do piloto</td><td class="ok">Idêntico (79, n 11.709; 14 regionais)</td></tr>
+    <tr><td>Tempo da consulta</td><td><span class="ok">0,03 s</span> no ClickHouse × 1min42s para o piloto baixar o dia pela API</td></tr>
+    <tr><td>Agente lê respostas individuais</td><td class="ok">Negado</td></tr>
+    <tr><td>Agente vê outro cliente</td><td class="ok">0 linhas</td></tr>
+  </table>
+
+  <p class="note" style="margin-top:22px">Acerto do agente na avaliação (<code>agent/eval_baseline.py</code>, 17 casos × 2 execuções, M1 8 GB)</p>
+  <div class="bars">
+    <div class="bar"><span>Modelo escolhendo ids e datas</span><div class="track"><div class="fill" style="width:25%;background:var(--guard)"></div></div><span>25%</span></div>
+    <div class="bar"><span>+ checagem de tipo</span><div class="track"><div class="fill" style="width:38%;background:var(--ch)"></div></div><span>38%</span></div>
+    <div class="bar"><span>+ nomes resolvidos no código</span><div class="track"><div class="fill" style="width:71%;background:var(--ch)"></div></div><span>71%</span></div>
+    <div class="bar"><span>Final, sem contexto da skill</span><div class="track"><div class="fill" style="width:100%;background:var(--code)"></div></div><span>100%</span></div>
+    <div class="bar"><span>Final, com contexto da skill</span><div class="track"><div class="fill" style="width:100%;background:var(--vec)"></div></div><span>100%</span></div>
+  </div>
+  <p class="note">Tempo médio final: 4,5 s sem contexto e 7,7 s com contexto. Com o modelo de 1,7B, o contexto da skill não aumentou o acerto; o que levou ao 100% foram regras em código. O conjunto foi usado para ajustar o agente, então o 100% ainda precisa de perguntas novas da operação para valer como teste.</p>
+
+  <!-- ===================================================== -->
+  <h2>6. O que ainda não existe</h2>
+  <table>
+    <tr><th>Item</th><th>Situação</th></tr>
+    <tr><td>Comparação de períodos, evolução mês a mês</td><td class="warn">Recusado com aviso; precisa de mais dias carregados e de uma ferramenta</td></tr>
+    <tr><td>Comentários, temas, busca vetorial de comentários</td><td class="warn">Aguarda autorização para carregar texto mascarado</td></tr>
+    <tr><td>Múltipla resposta, soma ponderada, filtros de canal e confiabilidade</td><td class="warn">Colunas existem; faltam views e ferramentas</td></tr>
+    <tr><td>Contexto e finalidade da pesquisa, vigência de propriedades, tipo de unidade</td><td class="no">Não existem no produto (ver <a href="metadata-semantics.md" style="color:var(--user)">metadata-semantics.md</a>)</td></tr>
+    <tr><td>Fine-tuning (LoRA no MLX)</td><td class="warn">Adiado: os erros atuais se resolvem melhor em código</td></tr>
+    <tr><td>Modelo de 32B na máquina do Coolify</td><td class="warn">Próxima etapa; repetir a comparação com e sem contexto da skill</td></tr>
+  </table>
+
+  <footer>
+    Arquivos: <code>clickhouse/</code> (schema, views, acesso, carga) · <code>agent/</code> (agente, tela, contexto, avaliação) · <code>docs/metadata-semantics.md</code>.<br>
+    Rodar: <code>clickhouse/README.md</code> e depois <code>agent/README.md</code>. Tela: <code>http://127.0.0.1:8080</code>.
+  </footer>
+</div>
+</body>
+</html>

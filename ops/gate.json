@@ -1,0 +1,11 @@
+{
+  "min_guardrail_tests": 37,
+  "min_eval_pass_rate": 0.95,
+  "max_eval_regression": 0.05,
+  "min_methodology_pass_rate": 0.95,
+  "max_data_lag_days": 2,
+  "parity": [
+    {"survey": 40851, "question": 1607201, "day": "2026-11-17", "nps": 79, "n": 11709,
+     "source": "motor do piloto (solvis.py query) sobre a API V1, 2026-11-18"}
+  ]
+}

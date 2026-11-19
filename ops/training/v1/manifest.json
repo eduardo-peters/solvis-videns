@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "status": "treinado e avaliado; não adotado",
+  "date": "2026-11-19",
+  "data": {"generator": "agent/train/build_dataset.py --version v1", "seed": 20261119, "conversations": 352,
+           "train_examples": 567, "valid_examples": 62, "train_sha": "7a69986bcd10"},
+  "training": {"base": "mlx-community/Qwen3-1.7B-4bit", "method": "LoRA (mlx_lm), mask_prompt, grad_checkpoint",
+               "iters": 200, "learning_rate": 0.0001, "lora_layers": 8, "batch_size": 1, "max_seq_length": 2048,
+               "minutes": 32.8, "peak_mem_gb": 3.45, "val_loss": [3.535, 0.255, 0.122],
+               "adapter": "~/.local/mlx-adapters/solvis-analyst-v1 (fora do repositório, 29,9 MB)"},
+  "evaluation": {"backend": "mlx_lm.server, chamadas em texto",
+                 "base": {"dev": 0.588, "holdout": 0.25}, "trained": {"dev": 0.588, "holdout": 0.625},
+                 "reference_ollama_native": {"dev": 1.0, "holdout": 0.75},
+                 "verdict": "melhor que o base no mesmo backend; abaixo do agente no Ollama, que segue em uso"},
+  "log": "ops/logs/training.log", "doc": "docs/training.md#v1--2026-11-19--solvis-analyst-v1"
+}

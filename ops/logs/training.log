@@ -1,0 +1,142 @@
+2026-11-19T14:57:03 train_start    {"name": "smoke", "base": "Qwen3-1.7B-4bit", "method": "LoRA (QLoRA sobre 4 bits)", "iters": 20, "learning_rate": 0.0001, "lora_layers": 8, "batch_size": 1, "max_seq_length": 2048, "mask_prompt": true, "grad_checkpoint": true, "train_examples": 567, "valid_examples": 62, "epochs_approx": 0.04, "data_sha": "7a69986bcd10", "generator": "agent/train/build_dataset.py", "adapter_path": "/Users/viniciusmadureira/.local/mlx-adapters/smoke"}
+2026-11-19T15:12:37 interrupted      {"name": "smoke", "note": "sessão interrompida antes da 1ª iteração; refeito"}
+2026-11-19T15:12:37 train_start    {"name": "smoke", "base": "Qwen3-1.7B-4bit", "method": "LoRA (QLoRA sobre 4 bits)", "iters": 20, "learning_rate": 0.0001, "lora_layers": 8, "batch_size": 1, "max_seq_length": 2048, "mask_prompt": true, "grad_checkpoint": true, "train_examples": 567, "valid_examples": 62, "epochs_approx": 0.04, "data_sha": "7a69986bcd10", "generator": "agent/train/build_dataset.py", "adapter_path": "/Users/viniciusmadureira/.local/mlx-adapters/smoke"}
+2026-11-19T15:14:21 val            {"iter": 1, "val_loss": 3.535}
+2026-11-19T15:18:53 val            {"iter": 20, "val_loss": 0.753}
+2026-11-19T15:19:02 train          {"iter": 20, "train_loss": 1.149, "it_per_sec": 0.151, "peak_mem_gb": 3.443}
+2026-11-19T15:19:03 train_done     {"minutes": 6.4, "final_train_loss": 1.149, "val_loss_first": 3.535, "val_loss_last": 0.753, "peak_mem_gb": 3.443, "adapter_mb": 10.0, "adapter_path": "/Users/viniciusmadureira/.local/mlx-adapters/smoke", "raw_output": "agent/results/train-smoke-20261119-151237.out", "weights_of_base_changed": false}
+2026-11-19T15:19:16 train_start    {"name": "solvis-analyst-v1", "base": "Qwen3-1.7B-4bit", "method": "LoRA (QLoRA sobre 4 bits)", "iters": 200, "learning_rate": 0.0001, "lora_layers": 8, "batch_size": 1, "max_seq_length": 2048, "mask_prompt": true, "grad_checkpoint": true, "train_examples": 567, "valid_examples": 62, "epochs_approx": 0.35, "data_sha": "7a69986bcd10", "generator": "agent/train/build_dataset.py", "adapter_path": "/Users/viniciusmadureira/.local/mlx-adapters/solvis-analyst-v1"}
+2026-11-19T15:21:11 val            {"iter": 1, "val_loss": 3.535}
+2026-11-19T15:24:54 train          {"iter": 25, "train_loss": 1.059, "it_per_sec": 0.113, "peak_mem_gb": 3.443}
+2026-11-19T15:28:52 train          {"iter": 50, "train_loss": 0.432, "it_per_sec": 0.106, "peak_mem_gb": 3.443}
+2026-11-19T15:32:35 train          {"iter": 75, "train_loss": 0.445, "it_per_sec": 0.113, "peak_mem_gb": 3.443}
+2026-11-19T15:37:35 val            {"iter": 100, "val_loss": 0.255}
+2026-11-19T15:37:42 train          {"iter": 100, "train_loss": 0.452, "it_per_sec": 0.126, "peak_mem_gb": 3.443}
+2026-11-19T15:40:57 train          {"iter": 125, "train_loss": 0.26, "it_per_sec": 0.129, "peak_mem_gb": 3.453}
+2026-11-19T15:44:08 train          {"iter": 150, "train_loss": 0.257, "it_per_sec": 0.131, "peak_mem_gb": 3.453}
+2026-11-19T15:47:18 train          {"iter": 175, "train_loss": 0.075, "it_per_sec": 0.133, "peak_mem_gb": 3.453}
+2026-11-19T15:51:59 val            {"iter": 200, "val_loss": 0.122}
+2026-11-19T15:52:05 train          {"iter": 200, "train_loss": 0.305, "it_per_sec": 0.135, "peak_mem_gb": 3.453}
+2026-11-19T15:52:06 train_done     {"minutes": 32.8, "final_train_loss": 0.305, "val_loss_first": 3.535, "val_loss_last": 0.122, "peak_mem_gb": 3.453, "adapter_mb": 29.9, "adapter_path": "/Users/viniciusmadureira/.local/mlx-adapters/solvis-analyst-v1", "raw_output": "agent/results/train-solvis-analyst-v1-20261119-151916.out", "weights_of_base_changed": false}
+2026-11-19T15:52:29 eval           {"model": "base", "set": "dev", "passed": 0, "cases": 17, "pass_rate": 0.0, "mean_secs": 0.2, "failed": ["benchmark", "choice_share", "faturamento", "no_data", "nps_regional", "nps_total", "nps_wrong_type", "pilot_comments", "pilot_compare", "pilot_csat", "pilot_multi", "pilot_pooling", "pilot_worst_unit", "scale_mean", "top_unit", "top_unit_survey", "volume"], "wall_min": 0.1}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "nps_total", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "nps_regional", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "volume", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "scale_mean", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "choice_share", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "top_unit", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "top_unit_survey", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "faturamento", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_csat", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_pooling", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_worst_unit", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_compare", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_comments", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "pilot_multi", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "nps_wrong_type", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "benchmark", "calls": null, "answer": ""}
+2026-11-19T15:52:29 eval_failure   {"model": "base", "case": "no_data", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval           {"model": "base", "set": "holdout", "passed": 0, "cases": 8, "pass_rate": 0.0, "mean_secs": 0.2, "failed": ["h_hub", "h_media_das_lojas", "h_pesquisa_volume", "h_primeira_vez", "h_produtos", "h_reclamacoes", "h_recomendacao", "h_taxa_resposta"], "wall_min": 0.0}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_recomendacao", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_hub", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_produtos", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_primeira_vez", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_taxa_resposta", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_media_das_lojas", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_reclamacoes", "calls": null, "answer": ""}
+2026-11-19T15:52:33 eval_failure   {"model": "base", "case": "h_pesquisa_volume", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval           {"model": "solvis-analyst-v1", "set": "dev", "passed": 0, "cases": 17, "pass_rate": 0.0, "mean_secs": 0.2, "failed": ["benchmark", "choice_share", "faturamento", "no_data", "nps_regional", "nps_total", "nps_wrong_type", "pilot_comments", "pilot_compare", "pilot_csat", "pilot_multi", "pilot_pooling", "pilot_worst_unit", "scale_mean", "top_unit", "top_unit_survey", "volume"], "wall_min": 0.1}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "nps_total", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "nps_regional", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "volume", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "scale_mean", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "choice_share", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit_survey", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "faturamento", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_csat", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_pooling", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_worst_unit", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_compare", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_comments", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_multi", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "nps_wrong_type", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "benchmark", "calls": null, "answer": ""}
+2026-11-19T15:52:38 eval_failure   {"model": "solvis-analyst-v1", "case": "no_data", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval           {"model": "solvis-analyst-v1", "set": "holdout", "passed": 0, "cases": 8, "pass_rate": 0.0, "mean_secs": 0.2, "failed": ["h_hub", "h_media_das_lojas", "h_pesquisa_volume", "h_primeira_vez", "h_produtos", "h_reclamacoes", "h_recomendacao", "h_taxa_resposta"], "wall_min": 0.0}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_recomendacao", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_hub", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_produtos", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_primeira_vez", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_taxa_resposta", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_media_das_lojas", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_reclamacoes", "calls": null, "answer": ""}
+2026-11-19T15:52:42 eval_failure   {"model": "solvis-analyst-v1", "case": "h_pesquisa_volume", "calls": null, "answer": ""}
+2026-11-19T15:52:42 compare        {"adapter": "solvis-analyst-v1", "delta_pass_rate": {"dev": 0.0, "holdout": 0.0}, "verdict": "empate: manter o base", "note": "mesmo backend (mlx_lm.server, chamadas em texto) para base e treinado"}
+2026-11-19T15:59:59 eval_invalid     {"adapter": "solvis-analyst-v1", "runs_at": "15:52", "reason": "ClickHouse caiu às 15:09 (memória durante o treino) e o mlx_lm.server recusava o campo model; todas as perguntas falharam em 0,2 s sem rodar. Resultados e veredito das 15:52 descartados."}
+2026-11-19T16:03:39 eval           {"model": "base", "set": "dev", "passed": 8, "cases": 17, "pass_rate": 0.471, "mean_secs": 12.6, "failed": ["choice_share", "nps_regional", "nps_total", "pilot_pooling", "pilot_worst_unit", "scale_mean", "top_unit", "top_unit_survey", "volume"], "wall_min": 3.6}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "nps_total", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "nps_regional", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "volume", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "scale_mean", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "choice_share", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "top_unit", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "top_unit_survey", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "pilot_pooling", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:03:39 eval_failure   {"model": "base", "case": "pilot_worst_unit", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval           {"model": "base", "set": "holdout", "passed": 1, "cases": 8, "pass_rate": 0.125, "mean_secs": 16.7, "failed": ["h_hub", "h_media_das_lojas", "h_pesquisa_volume", "h_primeira_vez", "h_produtos", "h_recomendacao", "h_taxa_resposta"], "wall_min": 2.2}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_recomendacao", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_hub", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_produtos", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_primeira_vez", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_taxa_resposta", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_media_das_lojas", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:05:56 eval_failure   {"model": "base", "case": "h_pesquisa_volume", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval           {"model": "solvis-analyst-v1", "set": "dev", "passed": 8, "cases": 17, "pass_rate": 0.471, "mean_secs": 3.0, "failed": ["choice_share", "nps_regional", "nps_total", "pilot_pooling", "pilot_worst_unit", "scale_mean", "top_unit", "top_unit_survey", "volume"], "wall_min": 0.9}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "nps_total", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "nps_regional", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "volume", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "scale_mean", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "choice_share", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit_survey", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_pooling", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:06:51 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_worst_unit", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval           {"model": "solvis-analyst-v1", "set": "holdout", "passed": 1, "cases": 8, "pass_rate": 0.125, "mean_secs": 2.2, "failed": ["h_hub", "h_media_das_lojas", "h_pesquisa_volume", "h_primeira_vez", "h_produtos", "h_recomendacao", "h_taxa_resposta"], "wall_min": 0.3}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_recomendacao", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_hub", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_produtos", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_primeira_vez", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_taxa_resposta", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_media_das_lojas", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 eval_failure   {"model": "solvis-analyst-v1", "case": "h_pesquisa_volume", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:07:11 compare        {"adapter": "solvis-analyst-v1", "delta_pass_rate": {"dev": 0.0, "holdout": 0.0}, "verdict": "empate: manter o base", "note": "mesmo backend (mlx_lm.server, chamadas em texto) para base e treinado"}
+2026-11-19T16:09:15 eval_invalid     {"adapter": "solvis-analyst-v1", "runs_at": "16:03-16:07", "reason": "o mlx_lm.server devolve <|im_end|> no fim do texto e o leitor de chamadas rejeitava todas; as 9 falhas iguais nos dois modelos eram isso. Saída real do treinado: nps(survey=\"Satisfação\", period=\"yesterday\"). Corrigido; avaliação refeita."}
+2026-11-19T16:14:14 eval           {"model": "base", "set": "dev", "passed": 10, "cases": 17, "pass_rate": 0.588, "mean_secs": 17.5, "failed": ["choice_share", "faturamento", "nps_wrong_type", "pilot_pooling", "pilot_worst_unit", "top_unit_survey", "volume"], "wall_min": 4.9}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "volume", "calls": [["evaluation_count", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "Não consegui obter esse valor das ferramentas, então não vou citá-lo. Tente dizer a pesquisa e a pergunta pelo nome."}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "choice_share", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "top_unit_survey", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "faturamento", "calls": [], "answer": "[resultado de evaluation_count(group_by=\"unit\")]  \n\"Qual loja teve mais respostas?\" → evaluation_count(group_by=\"unit\")  \n\"Qual pesquisa teve mais respostas?\" → evaluation_count(group_by=\"survey\")  \n\""}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "pilot_pooling", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "pilot_worst_unit", "calls": [["nps", {"survey": "Satisfação", "group_by": "unit", "period": "yesterday"}]], "answer": "<think>\nOkay, let's see. The user asked for the worst unit in NPS from yesterday's data in the \"Satisfação\" survey. The response provided shows the worst unit as \"027 - Washington Soares\" with an NPS "}
+2026-11-19T16:14:14 eval_failure   {"model": "base", "case": "nps_wrong_type", "calls": [["nps", {"survey": "Satisfação", "question": "Atendimento", "period": "yesterday"}], ["scale_mean", {"survey": "Satisfação", "question": "Atendimento", "period": "yesterday"}]], "answer": "Não consegui consultar a métrica pedida, então não vou responder com outra. Tente reformular dizendo a pesquisa e a métrica."}
+2026-11-19T16:17:19 eval           {"model": "base", "set": "holdout", "passed": 2, "cases": 8, "pass_rate": 0.25, "mean_secs": 22.8, "failed": ["h_media_das_lojas", "h_pesquisa_volume", "h_primeira_vez", "h_produtos", "h_recomendacao", "h_taxa_resposta"], "wall_min": 3.0}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_recomendacao", "calls": [["nps", {"survey": "Satisfação", "period": "yesterday"}], ["nps", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "Não consegui obter esse valor das ferramentas, então não vou citá-lo. Tente dizer a pesquisa e a pergunta pelo nome."}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_produtos", "calls": [["scale_mean", {"survey": "Satisfação", "question": "Produtos (qualidade/variedades)", "period": "yesterday"}]], "answer": "Não consegui obter esse valor das ferramentas, então não vou citá-lo. Tente dizer a pesquisa e a pergunta pelo nome."}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_primeira_vez", "calls": [["choice_share", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "Não consegui obter esse valor das ferramentas, então não vou citá-lo. Tente dizer a pesquisa e a pergunta pelo nome."}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_taxa_resposta", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_media_das_lojas", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:17:19 eval_failure   {"model": "base", "case": "h_pesquisa_volume", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:18:36 eval           {"model": "solvis-analyst-v1", "set": "dev", "passed": 10, "cases": 17, "pass_rate": 0.588, "mean_secs": 4.3, "failed": ["choice_share", "no_data", "pilot_pooling", "pilot_worst_unit", "top_unit", "top_unit_survey", "volume"], "wall_min": 1.2}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "volume", "calls": [["nps", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "A pesquisa Satisfação teve 11.709 avaliações em 17/11/2026."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "choice_share", "calls": [["choice_share", {"survey": "Satisfação", "question": "atendimento", "period": "yesterday"}]], "answer": "Em cada período, o resultado de cada resposta daria um número de vezes que ocorreu."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit", "calls": [["evaluation_count", {"survey": "Lojas", "period": "yesterday"}]], "answer": "A pesquisa de Lojas teve 0 avaliações em 17/11/2026."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "top_unit_survey", "calls": [["evaluation_count", {"survey": "all", "period": "yesterday"}], ["nps", {"survey": "all", "period": "yesterday"}]], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_pooling", "calls": [["nps", {"survey": "Satisfação", "group_by": "unit", "period": "yesterday"}]], "answer": "Não consegui obter esse valor das ferramentas, então não vou citá-lo. Tente dizer a pesquisa e a pergunta pelo nome."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "pilot_worst_unit", "calls": [], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:18:36 eval_failure   {"model": "solvis-analyst-v1", "case": "no_data", "calls": [["nps", {"survey": "Satisfação", "period": "month:2025-03"}]], "answer": "A pesquisa Satisfação, em março de 2025, não teve avaliações nem foi concluída."}
+2026-11-19T16:19:09 eval           {"model": "solvis-analyst-v1", "set": "holdout", "passed": 5, "cases": 8, "pass_rate": 0.625, "mean_secs": 3.7, "failed": ["h_pesquisa_volume", "h_primeira_vez", "h_taxa_resposta"], "wall_min": 0.5}
+2026-11-19T16:19:09 eval_failure   {"model": "solvis-analyst-v1", "case": "h_primeira_vez", "calls": [["choice_share", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "Não há dados pessoais ou de cada loja na mensagem."}
+2026-11-19T16:19:09 eval_failure   {"model": "solvis-analyst-v1", "case": "h_taxa_resposta", "calls": [["evaluation_count", {"survey": "Satisfação", "period": "yesterday"}]], "answer": "A pesquisa Satisfação, período ontem, teve 11.709 avaliações."}
+2026-11-19T16:19:09 eval_failure   {"model": "solvis-analyst-v1", "case": "h_pesquisa_volume", "calls": [["evaluation_count", {"survey": "Períodos", "period": "yesterday"}], ["evaluation_count", {"survey": "Períodos", "period": "yesterday"}]], "answer": "Não tenho uma ferramenta que responda isso com dados. Não vou responder sem consultar os dados."}
+2026-11-19T16:19:09 compare        {"adapter": "solvis-analyst-v1", "delta_pass_rate": {"dev": 0.0, "holdout": 0.375}, "verdict": "adotar", "note": "mesmo backend (mlx_lm.server, chamadas em texto) para base e treinado"}
