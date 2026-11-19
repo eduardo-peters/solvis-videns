@@ -8,6 +8,7 @@ do protótipo (clickhouse/README.md); o Ollama não é usado.
 Rodar: AGENT_TODAY=2026-11-18 python3 -m unittest discover -s tests/agent -v
 """
 import json
+import re
 import os
 import sys
 import unittest
@@ -146,6 +147,141 @@ class GapsFromTrainingV1(unittest.TestCase):
                      call("evaluation_count", survey="Satisfação", period="yesterday"),
                      say("A pesquisa Satisfação teve 11.709 avaliações em 17/11/2026."))
         self.assertEqual(out["outcome"], "answered")
+
+
+class Charts(unittest.TestCase):
+    def test_barras_de_nps_por_regional_iguais_a_tool_nps(self):
+        c = agent.t_chart({"kind": "bar", "metric": "nps", "by": "Regional", "survey": "Satisfação",
+                           "period": "yesterday"})["chart"]
+        ref = {r["value"]: int(r["nps"]) for r in agent.t_nps({"survey": "Satisfação", "group_by": "Regional",
+                                                               "period": "yesterday"})["rows"]}
+        self.assertEqual(dict(zip(c["labels"], c["series"][0]["values"])), ref)
+
+    def test_linha_de_volume_por_hora_soma_o_dia(self):
+        c = agent.t_chart({"kind": "line", "by": "hour", "period": "yesterday"})["chart"]
+        self.assertEqual(sum(c["series"][0]["values"]), 11709)
+
+    def test_ranking_de_nps_por_loja_respeita_amostra_minima(self):
+        out = agent.t_chart({"kind": "bar", "metric": "nps", "by": "unit", "survey": "Satisfação",
+                             "period": "yesterday"})
+        self.assertNotIn("027 - Washington Soares", out["chart"]["labels"])  # n = 2
+
+    B = {"survey": "Satisfação", "period": "yesterday"}
+
+    def test_todos_os_tipos_geram_especificacao(self):
+        cases = [dict(kind="bar", metric="nps", by="Regional", **self.B), dict(kind="hbar", metric="nps", **self.B),
+                 dict(kind="line", by="hour", period="yesterday"), dict(kind="area", metric="nps", by="hour", **self.B),
+                 dict(kind="combo", **self.B), dict(kind="stacked", by="Regional", **self.B),
+                 dict(kind="donut", by="channel", period="yesterday"), dict(kind="histogram", **self.B),
+                 dict(kind="scatter", **self.B), dict(kind="heatmap", period="yesterday"),
+                 dict(kind="heatmap", metric="nps", **self.B), dict(kind="profile", **self.B)]
+        for c in cases:
+            with self.subTest(kind=c["kind"], metric=c.get("metric")):
+                spec = agent.t_chart(dict(c))["chart"]
+                self.assertEqual(spec["type"], "hbar" if c["kind"] == "profile" else c["kind"])
+                self.assertTrue(spec["title"])
+
+    def test_histograma_soma_o_n_do_nps(self):
+        out = agent.t_chart({"kind": "histogram", **self.B})
+        self.assertEqual(out["n"], 11709)
+
+    def test_composicao_soma_100(self):
+        spec = agent.t_chart({"kind": "stacked", "by": "Regional", **self.B})["chart"]
+        for i in range(len(spec["labels"])):
+            self.assertAlmostEqual(sum(sr["values"][i] for sr in spec["series"]), 100, delta=0.2)
+
+    def test_media_por_pergunta_igual_a_scale_mean(self):
+        rows = agent.t_chart({"kind": "profile", **self.B})["rows"]
+        ref = agent.t_scale_mean({"survey": "Satisfação", "question": "3", "period": "yesterday"})["rows"][0]["mean"]
+        self.assertEqual([r["mean"] for r in rows if r["label"].startswith("3.")][0], ref)
+
+    def test_combo_volume_igual_ao_dia(self):
+        rows = agent.t_chart({"kind": "combo", **self.B})["rows"]
+        self.assertEqual(sum(r["evaluations"] for r in rows), 11709)
+
+    def test_legenda_sem_numeros_para_todos_os_tipos(self):
+        for k in ("bar", "stacked", "scatter", "heatmap", "donut", "histogram"):
+            args = {"kind": k, **self.B, **({"metric": "nps", "by": "Regional"} if k == "bar" else {})}
+            if k == "donut":
+                args = {"kind": "donut", "by": "channel", "period": "yesterday"}
+            spec = agent.t_chart(args)["chart"]
+            cap = agent.chart_caption(spec)
+            values = set()
+            for sr in spec.get("series", []):
+                values |= {v for v in sr["values"] if v is not None}
+            values |= set(spec.get("values", [])) | {p["y"] for p in spec.get("points", [])} | {p["x"] for p in spec.get("points", [])}
+            values |= {v for row in spec.get("matrix", []) for v in row if v is not None}
+            labels = " ".join(map(str, spec.get("labels", []) + spec.get("x", []) + spec.get("y", [])
+                                  + [p["label"] for p in spec.get("points", [])])) + " " + spec["title"]
+            said = {float(t) for t in re.findall(r"-?\d+(?:[.,]\d+)?", cap.replace(",", "."))
+                    if t not in re.findall(r"-?\d+(?:[.,]\d+)?", labels)}
+            self.assertFalse(said & {float(v) for v in values}, (k, cap))
+
+    def test_tipo_invalido_recusado(self):
+        with self.assertRaises(agent.ToolError):
+            agent.t_chart({"kind": "pizza", "period": "yesterday"})
+
+
+class ChartFlow(unittest.TestCase):
+    """Falhas reais no teste ponta a ponta dos gráficos."""
+
+    def test_grafico_encerra_e_nao_e_apagado(self):
+        out, fake = run("Faz um gráfico do NPS por Regional ontem na pesquisa Satisfação",
+                        call("chart", kind="bar", metric="nps", by="Regional", survey="Satisfação", period="yesterday"),
+                        call("nps", survey="Satisfação", group_by="Regional", period="yesterday"))
+        self.assertEqual(out["table"]["chart"]["type"], "bar")
+        self.assertEqual(len(fake.seen), 1)
+        self.assertTrue(out["answer"].startswith("NPS por Regional"))
+
+    def test_dispersao_nao_e_bloqueada_pela_checagem_de_metrica(self):
+        out, _ = run("Gráfico de dispersão das lojas: volume contra NPS, ontem, pesquisa Satisfação",
+                     call("chart", kind="scatter", survey="Satisfação", period="yesterday"))
+        self.assertEqual(out["outcome"], "answered")
+        self.assertEqual(out["table"]["chart"]["type"], "scatter")
+
+
+class ChartKindFixes(unittest.TestCase):
+    B = {"survey": "Satisfação", "period": "yesterday"}
+
+    def test_media_de_cada_pergunta_vira_profile(self):
+        out = agent.t_chart({"kind": "bar", "metric": "scale_mean", "by": "question", **self.B,
+                             "_user_q": "Gráfico com a média de cada pergunta de escala da Satisfação ontem"})
+        self.assertEqual(out["chart"]["title"], "Média de cada pergunta de escala")
+
+    def test_volume_e_nps_por_hora_vira_combo(self):
+        out = agent.t_chart({"kind": "line", "metric": "evaluation_count", "by": "hour", **self.B,
+                             "_user_q": "Mostra num gráfico o volume de respostas e o NPS por hora ontem na Satisfação"})
+        self.assertEqual(out["chart"]["type"], "combo")
+
+
+class Heatmap(unittest.TestCase):
+    Q = ("preciso visualizar um mapa de calor pelas top 10 unidades e hora de respostas, preenchido com a "
+         "quantidade de respostas de cada unidade por hora. nao quero ver os números, apenas o heatmap.")
+
+    def test_heatmap_chega_na_tela_e_bate_com_o_volume(self):
+        out, _ = run(self.Q, call("chart", kind="heatmap", top=10, period="yesterday"))
+        h = out["table"]["chart"]
+        self.assertEqual(len(h["y"]), 10)
+        self.assertEqual(len(h["matrix"]), 10)
+        total = agent.ch("SELECT count() c FROM raw.evaluations WHERE unit_id IN (SELECT unit_id FROM raw.evaluations "
+                         "GROUP BY unit_id ORDER BY count() DESC LIMIT 10)")[0]["c"]
+        self.assertEqual(sum(map(sum, h["matrix"])), int(total))
+        self.assertEqual(out["outcome"], "answered")
+
+    def test_pedido_sem_numeros_nao_mostra_contagens(self):
+        """Falha real: o modelo escreveu '373' e '217' com o usuário pedindo só o heatmap."""
+        out, _ = run(self.Q, call("chart", kind="heatmap", top=10, period="yesterday"))
+        self.assertNotIn("373", out["answer"])
+        self.assertNotIn("217", out["answer"])
+        self.assertIn("Mapa de calor", out["answer"])
+        self.assertEqual(events(out, "chart"), ["annotate"])
+
+    def test_heatmap_respondido_com_outra_metrica_e_bloqueado(self):
+        out, _ = run(self.Q, call("evaluation_count", group_by="unit", period="yesterday"),
+                     say("A loja com mais respostas foi 288 - Aracajú Adélia Franco."),
+                     say("Foi a 288 - Aracajú Adélia Franco."))
+        self.assertEqual(out["outcome"], "blocked")
+        self.assertEqual(events(out, "metric"), ["retry", "block"])
 
 
 class Annotations(unittest.TestCase):

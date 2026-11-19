@@ -8,7 +8,7 @@ Cada perfil de agente roda uma instância do servidor MCP (`python3 mcp/server.p
 
 | Perfil | Para quê | Tools |
 |---|---|---|
-| `analyst` | Responde perguntas de negócio sobre os resultados: métricas calculadas no servidor, catálogo e regras da skill. | [`nps`](#nps), [`scale_mean`](#scale_mean), [`choice_share`](#choice_share), [`evaluation_count`](#evaluation_count), [`list_surveys`](#list_surveys), [`list_questions`](#list_questions), [`list_unit_properties`](#list_unit_properties), [`data_coverage`](#data_coverage), [`metadata_catalog`](#metadata_catalog), [`describe_survey`](#describe_survey), [`explain_metric`](#explain_metric), [`skill_lookup`](#skill_lookup), [`question_types`](#question_types) |
+| `analyst` | Responde perguntas de negócio sobre os resultados: métricas calculadas no servidor, catálogo e regras da skill. | [`nps`](#nps), [`scale_mean`](#scale_mean), [`choice_share`](#choice_share), [`evaluation_count`](#evaluation_count), [`chart`](#chart), [`list_surveys`](#list_surveys), [`list_questions`](#list_questions), [`list_unit_properties`](#list_unit_properties), [`data_coverage`](#data_coverage), [`metadata_catalog`](#metadata_catalog), [`describe_survey`](#describe_survey), [`explain_metric`](#explain_metric), [`skill_lookup`](#skill_lookup), [`question_types`](#question_types) |
 | `data_engineer` | Cuida da qualidade e do significado dos dados: metadados, saúde, metodologia, avaliações e regras da skill. | [`list_surveys`](#list_surveys), [`data_coverage`](#data_coverage), [`metadata_catalog`](#metadata_catalog), [`describe_survey`](#describe_survey), [`unit_metadata`](#unit_metadata), [`data_health`](#data_health), [`explain_metric`](#explain_metric), [`skill_lookup`](#skill_lookup), [`methodology_rules`](#methodology_rules), [`quality_status`](#quality_status), [`question_types`](#question_types) |
 
 ## Matriz
@@ -19,6 +19,7 @@ Cada perfil de agente roda uma instância do servidor MCP (`python3 mcp/server.p
 | [`scale_mean`](#scale_mean) | ✓ |  | client | semantic.scale_mean |
 | [`choice_share`](#choice_share) | ✓ |  | client | semantic.choice_share |
 | [`evaluation_count`](#evaluation_count) | ✓ |  | client | raw.evaluations (client_id, survey_id, day, unit_id) |
+| [`chart`](#chart) | ✓ |  | client | semantic.answer_counts_daily, raw.evaluations (client_id, survey_id, day, unit_id, started_at, channel, completed), raw.units, raw.unit_properties, raw.choices, raw.questions |
 | [`list_surveys`](#list_surveys) | ✓ | ✓ | client | raw.surveys |
 | [`list_questions`](#list_questions) | ✓ |  | client | raw.questions |
 | [`list_unit_properties`](#list_unit_properties) | ✓ |  | client | raw.unit_properties |
@@ -130,6 +131,34 @@ Exemplo (`tools/call`):
 
 ```json
 {"name": "evaluation_count", "arguments": {"group_by": "unit", "period": "yesterday"}}
+```
+
+## chart
+
+Especificação de gráfico pronta para desenhar, com 11 tipos: bar, hbar (ranking), line e area (por hora), combo (volume + NPS por hora), stacked (promotores/neutros/detratores), donut, histogram (notas 0-10), scatter (unidades: respostas × NPS), heatmap (unidades × hora, volume ou NPS) e profile (média de cada pergunta de escala). Valores das mesmas views das tools de métrica, com amostra pequena marcada e notas de metodologia. Desenho de referência: agent/static/charts.js.
+
+- **Perfis:** `analyst`
+- **Credencial:** `client`
+- **Lê:** semantic.answer_counts_daily, raw.evaluations (client_id, survey_id, day, unit_id, started_at, channel, completed), raw.units, raw.unit_properties, raw.choices, raw.questions
+- **Skill:** metrics.yaml#nps, metrics.yaml#scale_mean, metrics.yaml#choice_share, metrics.yaml#evaluation_count, INV-02, INV-05, INV-17, INV-23, playbooks.md#3, playbooks.md#11
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|---|---|---|---|
+| `survey` | string |  | Nome da pesquisa como o usuário disse (ex.: 'Satisfação') |
+| `question` | string |  | Texto ou número da pergunta (ex.: 'Atendimento', '2') |
+| `period` | string |  | yesterday, today, last_7_days, this_month, last_month ou month:AAAA-MM |
+| `start` | string |  | Data inicial AAAA-MM-DD (em vez de period) |
+| `end` | string |  | Data final AAAA-MM-DD (em vez de period) |
+| `kind` | string |  | bar, hbar, line, area, combo, stacked, donut, histogram, scatter, heatmap, profile |
+| `metric` | string |  | evaluation_count, nps, scale_mean ou choice_share (padrão conforme o tipo) |
+| `by` | string |  | unit, hour, channel, completion, survey ou nome da propriedade (Regional...) |
+| `top` | integer |  | Máximo de itens (padrão 15; heatmap 10; máximo 40) |
+| `min_n` | integer |  | Amostra mínima por unidade em rankings, dispersão e heatmap de NPS (padrão 30) |
+
+Exemplo (`tools/call`):
+
+```json
+{"name": "chart", "arguments": {"kind": "stacked", "by": "Regional", "survey": "Satisfação", "period": "yesterday"}}
 ```
 
 ## list_surveys

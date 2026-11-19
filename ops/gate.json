@@ -1,5 +1,5 @@
 {
-  "min_guardrail_tests": 37,
+  "min_guardrail_tests": 54,
   "min_eval_pass_rate": 0.95,
   "max_eval_regression": 0.05,
   "min_methodology_pass_rate": 0.95,

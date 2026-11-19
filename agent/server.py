@@ -22,18 +22,19 @@ PAGE = r"""<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
  th{color:#aaa}svg{display:block;margin:6px 0}
  #bar{position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #333;display:flex;padding:10px 20px}
  #bar span{color:#5fd068;margin-right:8px}#q{flex:1;background:transparent;border:0;color:#fff;font:inherit;outline:0}
-</style></head><body>
+</style><script src="/charts.js"></script></head><body>
 <div id="log"><span class="t">solvis agente local · modelo MODEL · dados: ClickHouse 127.0.0.1 (usuário isolado)
 o modelo escolhe ferramentas fixas; números vêm só do ClickHouse e são conferidos na resposta.
 comandos: /limpar  /trace (mostra ou esconde as chamadas)
 </span></div>
-<div id="bar"><span>solvis&gt;</span><input id="q" autofocus autocomplete="off" placeholder="ex.: NPS da Satisfação ontem por Regional"></div>
+<div id="bar"><span>solvis&gt;</span><input id="q" autofocus autocomplete="off" placeholder="ex.: gráfico do NPS da Satisfação ontem por Regional"></div>
 <script>
-const log=document.getElementById('log'),q=document.getElementById('q');let hist=[],showTrace=true;
+const log=document.getElementById('log'),q=document.getElementById('q');let hist=[],showTrace=true,lastQ='';
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function add(h){log.insertAdjacentHTML('beforeend',h);window.scrollTo(0,document.body.scrollHeight)}
 function tableHtml(rows){if(!rows.length)return'';const k=Object.keys(rows[0]);
  return '<table><tr>'+k.map(x=>'<th>'+esc(x)+'</th>').join('')+'</tr>'+rows.map(r=>'<tr>'+k.map(x=>'<td>'+esc(r[x]??'')+'</td>').join('')+'</tr>').join('')+'</table>'}
+function hideNums(){return /(n[aã]o|sem) (quero )?(ver )?(os )?n[uú]meros|apenas o (gr[aá]fico|heat ?map|mapa)|s[oó] o (gr[aá]fico|heat ?map|mapa)/i.test(lastQ)}
 function chart(rows){const vk=['nps','share_pct','mean','evaluations'].find(k=>rows[0]&&k in rows[0]);
  const lk=['value','unit','text','letter'].find(k=>rows[0]&&k in rows[0]);if(!vk||!lk||rows.length<2)return'';
  const vals=rows.map(r=>+r[vk]),max=Math.max(...vals.map(Math.abs),1),h=18,w=360;
@@ -44,12 +45,13 @@ function chart(rows){const vk=['nps','share_pct','mean','evaluations'].find(k=>r
 q.addEventListener('keydown',async e=>{if(e.key!=='Enter'||!q.value.trim())return;const text=q.value.trim();q.value='';
  if(text==='/limpar'){hist=[];log.innerHTML='';return}
  if(text==='/trace'){showTrace=!showTrace;add('<span class="t">trace '+(showTrace?'ligado':'desligado')+'\n</span>');return}
- add('<span class="u">&gt; '+esc(text)+'</span>\n<span class="t" id="wait">pensando...</span>\n');hist.push({role:'user',content:text});
+ add('<span class="u">&gt; '+esc(text)+'</span>\n<span class="t" id="wait">pensando...</span>\n');hist.push({role:'user',content:text});lastQ=text;
  const t0=Date.now();let d;try{const r=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({history:hist})});d=await r.json()}catch(err){d={error:String(err)}}
  document.getElementById('wait').remove();
  if(d.error){add('<span class="err">erro: '+esc(d.error)+'</span>\n\n');hist.pop();return}
  if(showTrace)d.trace.forEach(c=>add('<span class="t">  ↳ '+esc(c.tool)+' '+esc(JSON.stringify(c.args))+' → '+(c.ok?c.rows+' linhas':'<span class=err>erro</span>')+'</span>\n'));
- if(d.table){add(tableHtml(d.table.rows));add(chart(d.table.rows))}
+ if(d.table&&d.table.chart){add(drawChart(d.table.chart,hideNums()))}
+ else if(d.table){add(tableHtml(d.table.rows));add(chart(d.table.rows))}
  add('<span class="a">'+esc(d.answer)+'</span>\n');
  add(d.verified?'<span class="ok">✓ números conferidos com o ClickHouse</span>':'<span class="warn">⚠ números sem origem nas ferramentas: '+esc(d.unverified_numbers.join(', '))+'</span>');
  add('<span class="t">  '+((Date.now()-t0)/1000).toFixed(1)+' s</span>\n\n');hist.push({role:'assistant',content:d.answer})});
@@ -66,6 +68,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.path == "/charts.js":
+            return self._send(200, (Path(__file__).parent / "static" / "charts.js").read_text(),
+                              "application/javascript; charset=utf-8")
         if self.path != "/":
             return self._send(404, "não encontrado", "text/plain; charset=utf-8")
         self._send(200, PAGE.replace("MODEL", agent.MODEL), "text/html; charset=utf-8")

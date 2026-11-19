@@ -53,6 +53,7 @@ Trocar de modelo: `AGENT_MODEL=qwen3:4b` (depois de `ollama pull qwen3:4b`). Rac
 | `scale_mean` | `scale_mean` | Só pergunta Scale |
 | `choice_share` | `choice_share` | Scale ou Multiple Choice |
 | `evaluation_count` | `raw.evaluations` (só `client_id`, `survey_id`, `day`, `unit_id`) | Pesquisa opcional; `group_by` survey, unit ou propriedade; a loja do topo vem com a pesquisa de origem |
+| `chart` | `agent/charts.py` | 11 tipos de gráfico desenhados pela tela ([docs/charts.md](../docs/charts.md)) |
 | `list_surveys`, `list_questions`, `list_unit_properties`, `data_coverage` | catálogo | Sem ids na saída, para o modelo não copiá-los errado |
 
 ## Linha de base (2026-11-18, M1 8 GB, `qwen3:1.7b`, 8 casos × 3 execuções)

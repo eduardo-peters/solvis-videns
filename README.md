@@ -49,10 +49,11 @@ Este repositório é privado. O que chega ao cliente é o artefato de release mo
 4. [skills/solvis-survey-analysis/SKILL.md](skills/solvis-survey-analysis/SKILL.md): a skill em si.
 5. [docs/open-questions.md](docs/open-questions.md): decisões que dependem de vocês.
 6. [docs/engineering.md](docs/engineering.md): como a engenharia funciona, camada por camada; [docs/tools.md](docs/tools.md): biblioteca de tools por perfil (gerada do código).
-7. [docs/training.md](docs/training.md): treino LoRA do modelo local com a skill; log em `ops/logs/training.log`.
-8. [docs/fluxo.html](docs/fluxo.html): fluxo ilustrado de uma pergunta no protótipo local (abra no navegador).
-9. [docs/data-ops.md](docs/data-ops.md): engenharia de dados do agente: guardrails testados, evals com portão, ajuste com aprovação, metodologia e auditoria.
-10. [docs/metadata-semantics.md](docs/metadata-semantics.md): metadados semânticos, o que já está em teste no protótipo ClickHouse (`clickhouse/`) e o que falta.
+7. [docs/charts.md](docs/charts.md): biblioteca de gráficos (11 tipos) da tool `chart`.
+8. [docs/training.md](docs/training.md): treino LoRA do modelo local com a skill; log em `ops/logs/training.log`.
+9. [docs/fluxo.html](docs/fluxo.html): fluxo ilustrado de uma pergunta no protótipo local (abra no navegador).
+10. [docs/data-ops.md](docs/data-ops.md): engenharia de dados do agente: guardrails testados, evals com portão, ajuste com aprovação, metodologia e auditoria.
+11. [docs/metadata-semantics.md](docs/metadata-semantics.md): metadados semânticos, o que já está em teste no protótipo ClickHouse (`clickhouse/`) e o que falta.
 
 ## Protótipo local (ClickHouse + modelo local)
 

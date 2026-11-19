@@ -8,7 +8,7 @@ GRANT SELECT ON semantic.* TO semantic_reader;
 GRANT SELECT(client_id, unit_id, name, code, city, state) ON raw.units TO semantic_reader;
 GRANT SELECT ON raw.unit_properties TO semantic_reader;
 GRANT SELECT ON raw.choices TO semantic_reader;
-GRANT SELECT(client_id, survey_id, day, unit_id) ON raw.evaluations TO semantic_reader;
+GRANT SELECT(client_id, survey_id, day, unit_id, started_at, channel, completed) ON raw.evaluations TO semantic_reader;
 -- raw.answers fica sem grant: o agente nunca lê resposta individual.
 
 GRANT semantic_reader TO assai_agent;

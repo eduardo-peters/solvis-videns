@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS raw.answers
     survey_id   UInt32,
     eval_ref    String,
     day         Date,
+    hour        UInt8,                  -- hora local de início da avaliação
     unit_id     UInt32,
     channel     LowCardinality(String),
     completed   UInt8,
@@ -74,6 +75,7 @@ CREATE TABLE IF NOT EXISTS semantic.answer_counts_daily
     survey_id   UInt32,
     question_id UInt32,
     day         Date,
+    hour        UInt8,
     unit_id     UInt32,
     channel     LowCardinality(String),
     completed   UInt8,
@@ -85,17 +87,17 @@ CREATE TABLE IF NOT EXISTS semantic.answer_counts_daily
 )
 ENGINE = SummingMergeTree(answers)
 PARTITION BY toYYYYMM(day)
-ORDER BY (client_id, survey_id, question_id, day, unit_id, channel, completed, reliable, kind, choice_id, score);
+ORDER BY (client_id, survey_id, question_id, day, hour, unit_id, channel, completed, reliable, kind, choice_id, score);
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS semantic.answer_counts_daily_mv
 TO semantic.answer_counts_daily AS
-SELECT client_id, survey_id, question_id, day, unit_id, channel, completed,
+SELECT client_id, survey_id, question_id, day, hour, unit_id, channel, completed,
        ifNull(toInt8(reliable), -1) AS reliable, kind,
        ifNull(choice_id, 0) AS choice_id, ifNull(score, -1) AS score,
        count() AS answers
 FROM raw.answers
 WHERE answered = 1
-GROUP BY client_id, survey_id, question_id, day, unit_id, channel, completed, reliable, kind, choice_id, score;
+GROUP BY client_id, survey_id, question_id, day, hour, unit_id, channel, completed, reliable, kind, choice_id, score;
 
 -- Catálogo de pesquisas e perguntas (para o agente resolver nomes em ids).
 CREATE TABLE IF NOT EXISTS raw.surveys

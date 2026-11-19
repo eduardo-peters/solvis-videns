@@ -45,7 +45,7 @@ def main():
     for (sid, ref, day, started, unit, ch, comp, rel, dq, dur) in db.execute(
             "SELECT survey_id, eval_ref, day, started_at, unit_id, channel, completed, reliable, dq, duration "
             "FROM evaluations"):
-        evs[(sid, ref)] = (unit or 0, ch, comp, rel)
+        evs[(sid, ref)] = (unit or 0, ch, comp, rel, int(started[11:13] or 0))
         rows.append({"client_id": cid, "survey_id": sid, "eval_ref": ref, "day": day,
                      "started_at": started[:19].replace("T", " "), "unit_id": unit or 0, "channel": ch,
                      "completed": comp, "reliable": rel, "dq": dq, "duration": dur})
@@ -55,8 +55,8 @@ def main():
     for (sid, ref, day, qid, kind, choice, score, answered) in db.execute(
             "SELECT survey_id, eval_ref, day, question_id, kind, choice_id, score, answered "
             "FROM answers WHERE question_id IS NOT NULL"):
-        unit, ch, comp, rel = evs[(sid, ref)]
-        rows.append({"client_id": cid, "survey_id": sid, "eval_ref": ref, "day": day, "unit_id": unit,
+        unit, ch, comp, rel, hour = evs[(sid, ref)]
+        rows.append({"client_id": cid, "survey_id": sid, "eval_ref": ref, "day": day, "hour": hour, "unit_id": unit,
                      "channel": ch, "completed": comp, "reliable": rel, "question_id": qid, "kind": kind,
                      "choice_id": choice, "score": score, "answered": answered})
     insert("raw.answers", rows)

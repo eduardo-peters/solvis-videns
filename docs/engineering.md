@@ -107,6 +107,10 @@ uso real / avaliação / testes ──> ops.* ──> ops/pipeline.py ──> po
 
 Detalhes e consultas de acompanhamento: [data-ops.md](data-ops.md).
 
+## Gráficos
+
+A tool `chart` gera 11 tipos de gráfico a partir das mesmas views das métricas. A tela os desenha em SVG, e qualquer cliente MCP pode desenhar a mesma especificação. Detalhes: [charts.md](charts.md).
+
 ## Treino do modelo
 
 LoRA no MLX sobre o Qwen3 1.7B, com dados gerados das regras da skill (sem dados de cliente). Ensina comportamento (escolher a tool, recusar, ler o resultado). Não ensina números. Detalhes, log e resultados: [training.md](training.md). v1: no holdout, 62,5% contra 25% do base no mesmo backend, mas ainda abaixo do agente atual no Ollama (75%).

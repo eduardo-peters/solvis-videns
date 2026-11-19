@@ -35,7 +35,7 @@ USE_CONTEXT = os.environ.get("AGENT_CONTEXT", "1") == "1"
 # chamadas e resultados em texto, mesma convenção do treino (agent/train/build_dataset.py).
 BACKEND = os.environ.get("AGENT_BACKEND", "ollama")
 MLX_URL = os.environ.get("MLX_URL", "http://127.0.0.1:8090")
-METRIC_TOOLS = ("nps", "choice_share", "scale_mean", "evaluation_count")
+METRIC_TOOLS = ("nps", "choice_share", "scale_mean", "evaluation_count", "chart")
 
 
 class ToolError(Exception):
@@ -375,6 +375,44 @@ def t_evaluation_count(args):
     return out
 
 
+def t_evaluation_heatmap(args):
+    """Mapa de calor: N unidades com mais avaliações (linhas) × hora local de início (colunas)."""
+    start, end = resolve_dates(args)
+    top = max(1, min(int(args.get("top") or 10) if str(args.get("top") or "10").isdigit() else 10, 30))
+    p = {"a": start, "b": end, "top": top}
+    where = "e.day BETWEEN {a:Date} AND {b:Date}"
+    sname = None
+    if args.get("survey"):
+        p["s"], sname = resolve_survey(args)
+        where += " AND e.survey_id = {s:UInt32}"
+    rows = ch(f"SELECT u.name AS unit, toHour(e.started_at) AS hour, count() AS evaluations "
+              f"FROM raw.evaluations AS e LEFT JOIN raw.units AS u ON u.unit_id = e.unit_id "
+              f"WHERE {where} AND e.unit_id IN (SELECT unit_id FROM raw.evaluations AS e WHERE {where} "
+              f"GROUP BY unit_id ORDER BY count() DESC LIMIT {{top:UInt8}}) GROUP BY unit, hour", p)
+    if not rows:
+        return {"survey_filter": sname or "todas as pesquisas", "period": {"start": start, "end": end},
+                "coverage": coverage(start, end), "rows": [], "note": "sem avaliações no período"}
+    totals = {}
+    for r in rows:
+        totals[r["unit"]] = totals.get(r["unit"], 0) + int(r["evaluations"])
+    units = sorted(totals, key=lambda u: -totals[u])
+    hours = list(range(min(int(r["hour"]) for r in rows), max(int(r["hour"]) for r in rows) + 1))
+    cell = {(r["unit"], int(r["hour"])): int(r["evaluations"]) for r in rows}
+    matrix = [[cell.get((u, h), 0) for h in hours] for u in units]
+    peak = max(max(row) for row in matrix)
+    return {"survey_filter": sname or "todas as pesquisas", "period": {"start": start, "end": end},
+            "coverage": coverage(start, end), "chart": "heatmap", "basis": "hora local de início da avaliação",
+            "x": hours, "y": units, "matrix": matrix, "max": peak,
+            "rows": [{"unit": u, "evaluations": totals[u]} for u in units],
+            "summary": {"units": len(units), "hours": f"{hours[0]}h a {hours[-1]}h"}}
+
+
+def t_chart(args):
+    """Gráficos: ver agent/charts.py (tipos, métricas, recortes)."""
+    import charts
+    return charts.build(args)
+
+
 S = "string"
 PERIOD = {"period": S, "start": S, "end": S}
 TOOLS = {
@@ -392,6 +430,14 @@ TOOLS = {
                                              "todas as pesquisas); group_by = none, survey, unit ou propriedade. "
                                              "Use para 'qual loja/pesquisa teve mais respostas'.",
                          {"survey": S, "group_by": S, **PERIOD}, []),
+    "chart": (t_chart, "Gráfico desenhado pela tela. kind: bar, hbar (ranking), line ou area (por hora), combo "
+                       "(volume + NPS por hora), stacked (promotores/neutros/detratores), donut, histogram (notas "
+                       "0-10), scatter (unidades: respostas × NPS), heatmap (unidades × hora), profile (média de cada "
+                       "pergunta de escala). metric: evaluation_count, nps, scale_mean, choice_share. by: unit, hour, "
+                       "channel, completion, survey ou nome da propriedade (Regional...). Use sempre que pedirem "
+                       "gráfico, visualização, mapa de calor, curva, ranking visual.",
+              {"kind": S, "metric": S, "by": S, "survey": S, "question": S, "top": "integer", "min_n": "integer",
+               **PERIOD}, []),
     "list_surveys": (t_list_surveys, "Busca pesquisas pelo nome.", {"search": S}, []),
     "list_questions": (t_list_questions, "Lista as perguntas de uma pesquisa. survey = nome.", {"survey": S},
                        ["survey"]),
@@ -417,6 +463,14 @@ Regras:
    scale_mean(survey="Satisfação", question="Atendimento", period="yesterday")
    "qual loja teve mais respostas?" -> evaluation_count(group_by="unit", period="last_7_days")
    "qual pesquisa teve mais respostas?" -> evaluation_count(group_by="survey", period="last_7_days")
+   "mapa de calor das top 10 unidades por hora" -> chart(kind="heatmap", top=10, period="yesterday")
+   "gráfico do NPS por regional" -> chart(kind="bar", metric="nps", by="Regional", survey="...", period="...")
+   "curva de respostas por hora" -> chart(kind="line", metric="evaluation_count", by="hour", period="...")
+   "composição do NPS por regional" -> chart(kind="stacked", by="Regional", survey="...", period="...")
+   "notas 0 a 10" -> chart(kind="histogram", survey="..."); "volume × NPS das lojas" -> chart(kind="scatter", survey="...")
+   "notas de todas as perguntas" -> chart(kind="profile", survey="..."); "NPS e volume por hora" -> chart(kind="combo", survey="...")
+   Com gráfico, a tela já mostra os valores: descreva o padrão (pico, horários fortes) em uma ou duas frases.
+   Se o usuário pedir para não ver números, não escreva números.
    "pior loja em NPS" -> nps(survey=..., group_by="unit", min_n=30)   (ranking de nota nunca é volume)
    "distribuição"/"% de cada alternativa" -> choice_share; "média"/"nota média" -> scale_mean
    NPS de cada loja e NPS geral -> uma chamada nps(group_by="unit"); o NPS geral está em total.
@@ -561,7 +615,8 @@ def ollama_chat(messages):
 
 # Palavras do pedido -> ferramentas aceitáveis. Pega a resposta com número real da métrica errada
 # (ex.: "pior loja em NPS" respondida com volume de respostas).
-INTENT = [(re.compile(r"quantas? (avalia|respost|pessoas)|volume|mais (respostas|avalia)|menos (respostas|avalia)"
+INTENT = [(re.compile(r"gr[aá]fico|visualiz|mapa de calor|heat ?map|curva|plot", re.I), {"chart"}),
+          (re.compile(r"quantas? (avalia|respost|pessoas)|volume|mais (respostas|avalia)|menos (respostas|avalia)"
                       r"|recebeu mais|teve mais respostas", re.I), {"evaluation_count"}),
           (re.compile(r"\bnps\b|recomenda", re.I), {"nps"}),
           (re.compile(r"distribui|percentual|porcentagem|% d", re.I), {"choice_share"}),
@@ -570,15 +625,24 @@ INTENT = [(re.compile(r"quantas? (avalia|respost|pessoas)|volume|mais (respostas
 
 def intent_mismatch(question, trace):
     used = {t["tool"] for t in trace if t["ok"] and t["tool"] in METRIC_TOOLS and t["rows"]}
-    if not used:
+    if not used or "chart" in used:  # o gráfico já traz a métrica pedida
         return None
     for rx, ok in INTENT:
         if rx.search(question) and not (used & ok):
-            label = {"evaluation_count": "volume de avaliações", "nps": "NPS", "choice_share": "distribuição",
+            label = {"chart": "gráfico", "evaluation_count": "volume de avaliações", "nps": "NPS", "choice_share": "distribuição",
                      "scale_mean": "média"}[sorted(ok)[0]]
             return (f"O usuário pediu {label}, mas você usou {', '.join(sorted(used))}. "
                     f"Chame {' ou '.join(sorted(ok))}.")
     return None
+
+
+NO_NUMBERS = re.compile(r"(n[aã]o|sem) (quero )?(ver )?(os )?n[uú]meros|apenas o (gr[aá]fico|heat ?map|mapa)"
+                        r"|s[oó] o (gr[aá]fico|heat ?map|mapa)", re.I)
+
+
+def chart_caption(c):
+    import charts
+    return charts.caption(c)
 
 
 REFUSAL = re.compile(r"não (há|existe|está disponível|estão disponíveis|temos|tenho|possu|consigo|é possível)"
@@ -727,6 +791,11 @@ def ask(history, source="cli"):
                     continue
                 return _finish("Não consegui obter esse valor das ferramentas, então não vou citá-lo. "
                                "Tente dizer a pesquisa e a pergunta pelo nome.", "blocked")
+            spec = (st["table"] or {}).get("chart")
+            if spec and NO_NUMBERS.search(question):  # pedido explícito sem números: legenda vem do código
+                if _NUM.search(answer):
+                    ev("no_numbers", "annotate", "legenda do modelo trocada por uma sem contagens")
+                answer = chart_caption(spec)
             for n_ in notes:  # aviso de capacidade não depende do modelo lembrar
                 if n_[:25].lower() not in answer.lower():
                     ev("capability", "annotate", n_)
@@ -751,8 +820,10 @@ def ask(history, source="cli"):
             except ToolError as e:
                 result, ok = {"error": str(e)}, False
             rows = result.get("rows") if isinstance(result, dict) else result
-            if ok and name in METRIC_TOOLS and rows:
+            if ok and name in METRIC_TOOLS and rows and not (st["table"] or {}).get("chart"):
                 st["table"] = {"tool": name, "args": args, "rows": rows}
+                if isinstance(result, dict) and isinstance(result.get("chart"), dict):
+                    st["table"]["chart"] = result["chart"]
             trace.append({"tool": name, "args": args, "ok": ok,
                           "rows": len(rows) if isinstance(rows, list) else 0,
                           "error": None if ok else result["error"],
@@ -766,6 +837,21 @@ def ask(history, source="cli"):
             content = json.dumps(result, ensure_ascii=False, default=str)[:6000]
             outputs.append(content)
             messages.append({"role": "tool", "tool_name": name, "content": content})
+            if ok and name == "chart" and isinstance(result, dict) and isinstance(result.get("chart"), dict):
+                # Gráfico pronto: a resposta é a legenda do código (destaques tirados do próprio gráfico).
+                answer = chart_caption(result["chart"])
+                if not NO_NUMBERS.search(question):
+                    for n_ in result["chart"].get("notes", []):
+                        answer += "\n• " + n_
+                for n_ in notes:
+                    ev("capability", "annotate", n_)
+                    answer = n_ + " " + answer
+                w = (result.get("coverage") or {}).get("warning")
+                if w:
+                    ev("coverage", "annotate", w)
+                    answer += "\n⚠ " + w.split(" Diga ao usuário")[0]
+                ev("chart", "annotate", result["chart"]["type"])
+                return _finish(answer, "answered")
     ev("loop", "block", f"{MAX_STEPS} passos sem resposta")
     return _finish("Não consegui concluir em poucos passos. Reformule a pergunta.", "blocked")
 
