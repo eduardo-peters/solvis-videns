@@ -27,6 +27,13 @@ Tudo local (`127.0.0.1`), na branch `slm-trainning`, com dados reais agregados d
   - **Erros de digitação:** "o nos atual" vira "o NPS atual".
   - **Pesquisa não citada:** quando só uma tem dados, o código a usa e declara. Isso também vale quando o modelo copia o marcador `"..."` do prompt (exemplos do prompt sem marcador).
   - **Testes:** 9 novos.
+- **Período sem dados** (falha real: "qual o nos atual?" só respondia que não havia avaliações):
+  - **Oferta do dia mais próximo:** a cobertura aponta o dia com dados mais próximo e a resposta termina com a oferta ("responda 'sim' para ver esse dia").
+  - **Aceite:** "sim" refaz a pergunta anterior nesse dia (`period=day:AAAA-MM-DD`, novo preset), mesmo que o modelo repita o período antigo.
+  - **Continuações em cadeia:** cada turno herda a pergunta efetiva do anterior. "sim" e depois "e por Regional?" mantêm o NPS e o dia aceito.
+  - **Pesquisa que o usuário não citou é ignorada:** o modelo copiava "Pesquisa Lojas" de um exemplo da skill. O resolvedor usa a única com dados e declara.
+  - **Respostas incompletas:** uma resposta com métrica e sem nenhum número ganha o resumo montado do resultado. Um nome de pesquisa entre aspas que não veio das tools ("Lojas") é trocado pelo real.
+  - **Testes:** 6 novos, 69 no portão.
 - **Biblioteca de gráficos** (hoje em `solvis_tools/core/charts.py`; desenho em `agent/static/charts.js`; `docs/charts.md`): a tool `chart` tem 11 tipos: barras, ranking horizontal, linha, área, combo volume+NPS, 100% empilhado, rosca, histograma 0-10, dispersão, mapa de calor (volume ou NPS) e perfil de notas por pergunta. A hora entra nas respostas e nas contagens pré-agregadas (`hour` em `raw.answers` e `semantic.answer_counts_daily`) e o agente passa a ler `started_at`, `channel` e `completed` das avaliações. A legenda é gerada pelo código. O pedido "não quero ver os números" esconde valores no desenho e na legenda. Amostra pequena, `min_n` em rankings e escalas de amplitude diferente seguem a skill. Há 17 testes novos (54 no portão) e 7 pedidos reais validados com o modelo. Também foi corrigida a tela, que caía com "Load failed" quando o servidor do agente estava parado.
 - **Treino organizado por versão:** `ops/training/v1/` e `ops/training/v2/` trazem dados e manifesto (configuração, hash, resultado ou plano). A v1 se reproduz byte a byte pelo gerador. `train.py --version` lê a pasta da versão, e `agent/train/README.md` resume o processo. Removido `agent/enrich.py` (enriquecimento por Modelfile, nunca executado, substituído pelo treino).
 

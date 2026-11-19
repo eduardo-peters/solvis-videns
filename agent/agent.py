@@ -278,6 +278,9 @@ _MONTH_N = {m: i + 1 for i, m in enumerate(_MONTHS.split("|"))}
 
 def period_from_question(q):
     """Período dito pelo usuário, para quando o modelo esquece de passar."""
+    d = re.search(r"\(dia (\d{4}-\d{2}-\d{2})\)", q)
+    if d:
+        return "day:" + d.group(1)
     m = re.search(r"(%s) de (\d{4})" % _MONTHS, q, re.I)
     if m:
         return "month:%s-%02d" % (m.group(2), _MONTH_N[m.group(1).lower()])
@@ -341,6 +344,9 @@ TYPOS = [(re.compile(r"\b(o|do|de|no|um|seu|meu|nosso) nos\b", re.I), r"\1 NPS")
          (re.compile(r"\bnsp\b|\bnpss\b|\bnp s\b", re.I), "NPS")]
 
 
+ACCEPT = re.compile(r"^(sim|pode|pode ser|ok|quero|claro|mostra|mostre|isso|beleza|s)\b[\s!.?]*$", re.I)
+
+
 def normalize_question(q):
     """Corrige erros de digitação comuns em nomes de métrica ('o nos atual' -> 'o NPS atual')."""
     for rx, rep in TYPOS:
@@ -348,22 +354,41 @@ def normalize_question(q):
     return q
 
 
+def _effective(question, prev_eff, prev_answer):
+    """Pergunta efetiva de um turno, dada a pergunta efetiva anterior e a resposta anterior."""
+    cur = normalize_question(question)
+    offer = re.search(r"dia com dados mais próximo é (\d{4}-\d{2}-\d{2})", prev_answer or "")
+    if prev_eff and offer and ACCEPT.search(cur.strip()):
+        base = re.sub(r"\s*\(dia \d{4}-\d{2}-\d{2}\)", "", prev_eff)
+        return f"{base} (dia {offer.group(1)})", False
+    if prev_eff and FOLLOW_UP.search(cur.strip()) and len(cur.split()) <= 8:
+        ctx = re.sub(r"\s*\(contexto: .*\)$", "", prev_eff)
+        return f"{cur} (contexto: {ctx})", True
+    return cur, False
+
+
 def model_turns(history):
     """Turnos que o modelo vê. Cada pergunta nova é um turno independente: o histórico inteiro fazia o
-    modelo pequeno repetir a chamada anterior (ex.: heatmap de novo num pedido de barras). Só uma
-    continuação curta ("e por Regional?") leva junto a pergunta anterior, como contexto em texto."""
-    users = [m["content"] for m in history if m["role"] == "user"]
-    if not users:
+    modelo pequeno repetir a chamada anterior. Continuações ("e por Regional?") e aceites ("sim") são
+    resolvidos em cadeia: cada turno herda a pergunta efetiva do anterior, não o texto literal."""
+    eff, follow, answer = None, False, ""
+    for m in history:
+        if m["role"] == "user":
+            eff, follow = _effective(m["content"], eff, answer)
+            answer = ""
+        elif m["role"] == "assistant":
+            answer = m.get("content", "")
+    if eff is None:
         return [], ""
-    cur = normalize_question(users[-1])
-    if len(users) > 1 and FOLLOW_UP.search(cur.strip()) and len(cur.split()) <= 8:
-        prev = normalize_question(users[-2])
-        return [{"role": "user", "content": f"Pergunta anterior (contexto): {prev}\nPergunta atual: {cur}"}], cur
-    return [{"role": "user", "content": cur}], cur
+    if follow:
+        cur, ctx = eff.split(" (contexto: ", 1)
+        return [{"role": "user", "content": f"Pergunta anterior (contexto): {ctx[:-1]}\nPergunta atual: {cur}"}], eff
+    return [{"role": "user", "content": eff}], eff
 
 
 def follow_up_dimension(question):
     """Recorte citado numa continuação ("e por Regional?"): o código aplica; o modelo pequeno repete o anterior."""
+    question = question.split(" (contexto: ")[0]
     if not re.search(r"^\s*(e|e agora|agora)?\s*(por|no|na)\b", question, re.I):
         return None
     text = re.sub(r"^\s*(e|e agora|agora)?\s*(por|no|na)\s+", "", question, flags=re.I).strip(" ?.!")
@@ -390,6 +415,46 @@ TOP_N = re.compile(r"\btop\s*(?:n\s*)?(?:superior\s*)?(?:de\s*|a\s*)?(\d{1,2})\b
 def top_from_question(q):
     m = TOP_N.search(q)
     return int(m.group(1) or m.group(2)) if m else None
+
+
+def summary_from(trace, outputs):
+    """Resposta mínima montada do último resultado de métrica (quando o modelo não cita o número)."""
+    for t, o in zip(reversed(trace), reversed(outputs[-len(trace):] if trace else [])):
+        if not t["ok"] or t["tool"] not in ("nps", "scale_mean", "evaluation_count"):
+            continue
+        r = json.loads(o) if o.startswith("{") else {}
+        per = (r.get("period") or {})
+        when = per.get("start") if per.get("start") == per.get("end") else f"{per.get('start')} a {per.get('end')}"
+        sv = r.get("survey") or r.get("survey_filter") or ""
+        if t["tool"] == "nps" and r.get("total"):
+            tot = r["total"]
+            out = f"O NPS da pesquisa {sv} foi {tot['nps']}, com {tot['n']} respostas, em {when}."
+            if r.get("worst") and r.get("best"):
+                w, b = r["worst"], r["best"]
+                lab = lambda x: x.get("unit") or x.get("value")  # noqa: E731
+                out += f" Menor: {lab(w)} ({w['nps']}, n {w['n']}); maior: {lab(b)} ({b['nps']}, n {b['n']})."
+            return out
+        if t["tool"] == "scale_mean" and r.get("rows"):
+            x = r["rows"][0]
+            return f"A média de {r.get('question', '')} foi {x['mean']}, com {x['n']} respostas, em {when}."
+        if t["tool"] == "evaluation_count" and r.get("total"):
+            return f"Foram {r['total']['evaluations']} avaliações em {when} ({sv})."
+    return None
+
+
+QUOTED = re.compile(r'["“]([^"”]{3,60})["”]')
+
+
+def fix_names(answer, outputs):
+    """Nome entre aspas que não aparece em nenhum resultado (ex.: pesquisa "Lojas", copiada de exemplo)."""
+    seen = " ".join(outputs)
+    bad = [m for m in QUOTED.findall(answer) if m not in seen and not re.fullmatch(r"[\d\s.,%-]+", m)]
+    survey = next((json.loads(o).get("survey") for o in reversed(outputs)
+                   if o.startswith("{") and isinstance(json.loads(o).get("survey"), str)), None)
+    for b in bad:
+        if survey and re.search(r"pesquisa\s*[\"“]" + re.escape(b), answer, re.I):
+            answer = re.sub(r'(pesquisa\s*)["“]' + re.escape(b) + r'["”]', r'\1"' + survey + '"', answer, flags=re.I)
+    return answer, bad
 
 
 def ask(history, source="cli"):
@@ -478,6 +543,17 @@ def ask(history, source="cli"):
                 if _NUM.search(answer):
                     ev("no_numbers", "annotate", "legenda do modelo trocada por uma sem contagens")
                 answer = chart_caption(spec)
+            fixed, bad_names = fix_names(answer, outputs)
+            if bad_names:
+                ev("names", "annotate", ", ".join(bad_names))
+                answer = fixed
+            metric_ok = [t for t in trace if t["ok"] and t["tool"] in ("nps", "scale_mean", "evaluation_count")
+                         and t["rows"]]
+            if metric_ok and not _NUM.search(answer) and not NO_NUMBERS.search(question):
+                summary = summary_from(trace, outputs)
+                if summary:
+                    ev("numbers", "annotate", "resposta sem o número; resumo montado do resultado")
+                    answer = summary + (" " + answer if answer and not REFUSAL.search(answer) else "")
             for n_ in notes:  # aviso de capacidade não depende do modelo lembrar
                 if n_[:25].lower() not in answer.lower():
                     ev("capability", "annotate", n_)
@@ -492,8 +568,18 @@ def ask(history, source="cli"):
             args = c["function"].get("arguments") or {}
             if isinstance(args, str):
                 args = json.loads(args or "{}")
+            if name in METRIC_TOOLS and str(default_period or "").startswith("day:"):
+                # dia aceito pelo usuário depois da oferta: vale mesmo se o modelo repetir o período antigo
+                args = {**{k: v for k, v in args.items() if k not in ("period", "start", "end")},
+                        "period": default_period}
             if name in METRIC_TOOLS and not any(args.get(k) for k in ("period", "start", "end")):
                 args = {**args, "period": default_period or "last_7_days"}  # regra 7 do prompt
+            sv = str(args.get("survey") or "").strip()
+            if sv and name in METRIC_TOOLS and not any(w in _fold(question) for w in _fold(sv) if len(w) > 3):
+                # Pesquisa que o usuário não citou (o modelo pequeno copia nomes dos exemplos): o resolvedor
+                # usa a única com dados e declara, ou pede a pesquisa.
+                ev("survey", "annotate", f"pesquisa não citada pelo usuário ignorada: {sv}")
+                args = {k: v for k, v in args.items() if k != "survey"}
             n_top = top_from_question(question)
             if name == "chart" and n_top and str(args.get("top") or "") != str(n_top):
                 ev("top_n", "annotate", f"top: {args.get('top')} -> {n_top}")

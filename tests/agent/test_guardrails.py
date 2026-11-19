@@ -316,6 +316,58 @@ class Turns(unittest.TestCase):
         self.assertEqual(agent.top_from_question("as 5 melhores lojas"), 5)
         self.assertIsNone(agent.top_from_question("NPS por Regional"))
 
+    def test_sem_dados_oferece_o_dia_mais_proximo(self):
+        """Falha real: 'qual o nos atual?' (hoje, sem dados) só dizia que não havia avaliações."""
+        out, _ = run("qual o nos atual?", call("nps", survey="Satisfação", period="today"),
+                     say("Não há avaliações no período."))
+        self.assertIn("O dia com dados mais próximo é 2026-11-17", out["answer"])
+        self.assertIn("coverage", [e["guardrail"] for e in out["guardrail_events"]])
+
+    def test_sim_depois_da_oferta_mostra_o_dia(self):
+        hist = [{"role": "user", "content": "qual o nos atual?"},
+                {"role": "assistant", "content": "Não há avaliações no período.\n⚠ Não há avaliações carregadas em "
+                                                 "2026-11-18. O dia com dados mais próximo é 2026-11-17; responda "
+                                                 "'sim' para ver esse dia."},
+                {"role": "user", "content": "sim"}]
+        agent.ollama_chat = Scripted(call("nps", survey="Satisfação", period="today"),
+                                     say("O NPS foi 79, com 11.709 respostas, em 17/11/2026."))
+        out = agent.ask(hist, source="test")
+        self.assertEqual(out["trace"][0]["scope"]["period"], {"start": "2026-11-17", "end": "2026-11-17"})
+        self.assertEqual(out["outcome"], "answered")
+        self.assertIn("79", out["answer"])
+
+    def test_cadeia_sim_e_continuacao_mantem_metrica_e_dia(self):
+        """Falha real: 'sim' e depois 'e por Regional?' perderam o NPS e o dia aceito."""
+        offer = ("⚠ Não há avaliações carregadas em 2026-11-18. O dia com dados mais próximo é 2026-11-17; "
+                 "responda 'sim' para ver esse dia.")
+        hist = [{"role": "user", "content": "qual o nos atual?"}, {"role": "assistant", "content": offer},
+                {"role": "user", "content": "sim"}, {"role": "assistant", "content": "O NPS foi 79..."},
+                {"role": "user", "content": "e por Regional?"}]
+        turns, q = agent.model_turns(hist)
+        self.assertIn("NPS", turns[0]["content"])
+        self.assertEqual(agent.period_from_question(q), "day:2026-11-17")
+        self.assertEqual(agent.follow_up_dimension(q), "Regional")
+
+    def test_pesquisa_inventada_e_ignorada(self):
+        """Falha real: o modelo passou survey='Pesquisa Lojas', que vem de um exemplo da skill."""
+        out, _ = run("qual o NPS de ontem?", call("nps", survey="Pesquisa Lojas", period="yesterday"),
+                     say("O NPS foi 79, com 11.709 respostas, em 17/11/2026."))
+        self.assertEqual(out["trace"][0]["scope"]["survey"], "Satisfação")
+        self.assertIn("survey", [e["guardrail"] for e in out["guardrail_events"]])
+
+    def test_resposta_sem_numero_ganha_o_resultado(self):
+        """Falha real: depois do 'sim', a resposta não citou NPS, n nem dia."""
+        out, _ = run("qual o NPS de ontem?", call("nps", period="yesterday"),
+                     say("A resposta foi gerada com base nos dados disponíveis."))
+        self.assertTrue(out["answer"].startswith("O NPS da pesquisa Satisfação foi 79, com 11709 respostas"))
+
+    def test_nome_de_pesquisa_errado_e_trocado(self):
+        """Falha real: 'O NPS geral da pesquisa "Lojas"...'."""
+        out, _ = run("NPS por Regional ontem", call("nps", group_by="Regional", period="yesterday"),
+                     say('O NPS geral da pesquisa "Lojas" em 2026-11-17 foi 79, com 11.709 respostas.'))
+        self.assertIn('pesquisa "Satisfação"', out["answer"])
+        self.assertNotIn('"Lojas"', out["answer"])
+
     def test_typo_nos_vira_nps(self):
         self.assertEqual(agent.normalize_question("qual o nos atual?"), "qual o NPS atual?")
         self.assertEqual(agent.normalize_question("o nos por unidade"), "o NPS por unidade")

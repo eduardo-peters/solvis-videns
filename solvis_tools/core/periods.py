@@ -16,6 +16,10 @@ def resolve_period(preset):
     """Preset -> (start, end). O modelo nunca faz conta de data."""
     t = dt.date.fromisoformat(TODAY)
     raw = str(preset).strip().lower()
+    d = re.fullmatch(r"day:(\d{4}-\d{2}-\d{2})", raw)
+    if d:
+        dt.date.fromisoformat(d.group(1))
+        return d.group(1), d.group(1)
     m = re.fullmatch(r"month:(\d{4})-(\d{2})", raw)
     if m:
         first = dt.date(int(m.group(1)), int(m.group(2)), 1)

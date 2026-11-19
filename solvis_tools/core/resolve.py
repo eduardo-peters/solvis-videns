@@ -149,6 +149,16 @@ def coverage(start, end):
     if int(days["d"]) and int(days["d"]) < expected:
         c["warning"] = (f"Só há dados de {days['first']} a {days['last']} neste período. "
                         f"Diga ao usuário que o resultado cobre só esses dias.")
+    if not int(days["d"]):
+        near = ch("SELECT maxIf(day, day < {a:Date}) AS before, minIf(day, day > {b:Date}) AS after, "
+                  "countIf(day < {a:Date}) AS nb, countIf(day > {b:Date}) AS na FROM raw.evaluations",
+                  {"a": start, "b": end})[0]
+        d = near["before"] if int(near["nb"]) else (near["after"] if int(near["na"]) else None)
+        if d:
+            c["nearest_day_with_data"] = d
+            per = start if start == end else f"{start} a {end}"
+            c["warning"] = (f"Não há avaliações carregadas em {per}. O dia com dados mais próximo é {d}; "
+                            f"responda 'sim' para ver esse dia. Diga ao usuário que não há dados no período.")
     return c
 
 
