@@ -94,7 +94,7 @@ Cada checagem vira uma consulta no ClickHouse e uma nota de saúde por pesquisa,
 | Views semânticas com paridade numérica às telas | `clickhouse/02_semantic.sql` (NPS total e por Regional idênticos ao piloto em 17/11) |
 | Catálogo de pesquisas, perguntas, alternativas, unidades e propriedades | `clickhouse/01_schema.sql` |
 | Isolamento por cliente e sem acesso a respostas individuais | `clickhouse/03_access.sql` |
-| Regras da skill vetorizadas (41 trechos) e recuperadas por pergunta | `semantic.skill_chunks`, `agent/context.py` |
+| Regras da skill vetorizadas (41 trechos) e recuperadas por pergunta | `semantic.skill_chunks`, `solvis_tools/core/skill_index.py` |
 | Modelo local (SLM) que escolhe a ferramenta e responde; nomes resolvidos em ids pelo código | `agent/` (Ollama + `qwen3:1.7b`, só em `127.0.0.1`); linha de base em [agent/README.md](../agent/README.md) |
 
 ## Próximas entradas

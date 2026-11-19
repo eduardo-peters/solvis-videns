@@ -65,7 +65,7 @@ O catálogo liga cada campo de metadado a três coisas: a regra da skill que dep
 
 ## 4. Tools e MCP
 
-Cada tool é registrada uma vez em `mcp/solvis_tools/` com: nome, descrição, esquema de entrada com descrição por parâmetro, perfis que a recebem, credencial que a executa, o que ela lê, regras da skill ligadas e um exemplo. Sem esses campos ela não registra. A documentação ([tools.md](tools.md)) é gerada desse registro, e um teste falha se divergir.
+Cada tool fica num arquivo próprio em `solvis_tools/tools/` ([solvis_tools/README.md](../solvis_tools/README.md)) e é registrada com: nome, descrição, esquema de entrada com descrição por parâmetro, perfis que a recebem, credencial que a executa, o que ela lê, regras da skill ligadas e um exemplo. Sem esses campos ela não registra. A documentação ([tools.md](tools.md)) é gerada desse registro, e um teste falha se divergir.
 
 | Perfil | Tools | Credencial |
 |---|---|---|
@@ -120,10 +120,10 @@ LoRA no MLX sobre o Qwen3 1.7B, com dados gerados das regras da skill (sem dados
 | Quero | Faço | O pipeline confere |
 |---|---|---|
 | Novo metadado da operação | Linha em `ops/metadata_catalog.json` (+ checagem em `ops/pipeline.py` se mensurável) | Checagem citada existe; regra da skill citada existe |
-| Nova tool | `@tool(...)` em `mcp/solvis_tools/`, depois `python3 mcp/gen_docs.py` | Documentação em dia; exemplo executa; perfil e credencial certos |
+| Nova tool | Arquivo `solvis_tools/tools/<nome>.py` com `@tool(...)`, depois `python3 mcp/gen_docs.py` | Documentação em dia; exemplo executa; perfil e credencial certos |
 | Nova métrica | View em `clickhouse/02_semantic.sql` + tool | Paridade (acrescente o valor esperado em `ops/gate.json`) |
-| Mudar regra da skill | Editar a skill e `python3 agent/context.py index` | `skill_index_current` falha se esquecer de reindexar |
-| Novo perfil de agente | Entrada em `AGENTS` (`mcp/solvis_tools/__init__.py`) e `agents=[...]` nas tools | Testes de menor privilégio |
+| Mudar regra da skill | Editar a skill e `python3 -m solvis_tools.core.skill_index index` | `skill_index_current` falha se esquecer de reindexar |
+| Novo perfil de agente | Entrada em `AGENTS` (`solvis_tools/__init__.py`) e `agents=[...]` nas tools | Testes de menor privilégio |
 
 ## Limites atuais
 

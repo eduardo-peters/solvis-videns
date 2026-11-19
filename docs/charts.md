@@ -1,6 +1,6 @@
 # Gráficos
 
-Data: 2026-11-19 · Código: `agent/charts.py` (especificação) e `agent/static/charts.js` (desenho em SVG, sem bibliotecas) · Tool: `chart` ([tools.md](tools.md#chart))
+Data: 2026-11-19 · Código: `solvis_tools/core/charts.py` (especificação), `solvis_tools/tools/chart.py` (tool) e `agent/static/charts.js` (desenho em SVG, sem bibliotecas) · Tool: `chart` ([tools.md](tools.md#chart))
 
 O modelo escolhe o tipo, a métrica e o recorte. O código calcula com as mesmas views e contagens das tools de métrica, com as mesmas fórmulas: NPS pelas contagens, média sem "Não se aplica", distribuição com N/A no denominador. A tela desenha. A legenda da resposta vem do próprio gráfico, gerada pelo código. O modelo não reescreve números.
 

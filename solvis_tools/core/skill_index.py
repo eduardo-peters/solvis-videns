@@ -7,8 +7,8 @@ Na pergunta, entram os trechos mais próximos dentro de um orçamento de caracte
 
 Só conteúdo da skill é vetorizado aqui (nada de dado de cliente).
 
-Indexar:  python3 agent/context.py index
-Testar:   python3 agent/context.py search "qual o nosso CSAT?"
+Indexar:  python3 -m solvis_tools.core.skill_index index
+Testar:   python3 -m solvis_tools.core.skill_index search "qual o nosso CSAT?"
 """
 import json
 import os
@@ -18,7 +18,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SKILL = ROOT / "skills" / "solvis-survey-analysis-pilot"
 OLLAMA = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 EMBED_MODEL = os.environ.get("AGENT_EMBED_MODEL", "nomic-embed-text")
@@ -121,9 +121,8 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["index"]:
         index()
     elif sys.argv[1:2] == ["search"]:
-        sys.path.insert(0, str(Path(__file__).parent))
-        import agent
-        for r in retrieve(" ".join(sys.argv[2:]), agent.ch):
+        from .db import ch
+        for r in retrieve(" ".join(sys.argv[2:]), ch):
             print(f"{float(r['d']):.3f}  {r['source']} · {r['heading']}  ({len(r['text'])} car.)")
     else:
         print(__doc__)

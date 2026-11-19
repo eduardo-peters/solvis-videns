@@ -53,7 +53,7 @@ Trocar de modelo: `AGENT_MODEL=qwen3:4b` (depois de `ollama pull qwen3:4b`). Rac
 | `scale_mean` | `scale_mean` | Só pergunta Scale |
 | `choice_share` | `choice_share` | Scale ou Multiple Choice |
 | `evaluation_count` | `raw.evaluations` (só `client_id`, `survey_id`, `day`, `unit_id`) | Pesquisa opcional; `group_by` survey, unit ou propriedade; a loja do topo vem com a pesquisa de origem |
-| `chart` | `agent/charts.py` | 11 tipos de gráfico desenhados pela tela ([docs/charts.md](../docs/charts.md)) |
+| `chart` | `solvis_tools/core/charts.py` | 11 tipos de gráfico desenhados pela tela ([docs/charts.md](../docs/charts.md)) |
 | `list_surveys`, `list_questions`, `list_unit_properties`, `data_coverage` | catálogo | Sem ids na saída, para o modelo não copiá-los errado |
 
 ## Linha de base (2026-11-18, M1 8 GB, `qwen3:1.7b`, 8 casos × 3 execuções)
@@ -83,8 +83,8 @@ Leitura: com 1,7B parâmetros, o modelo dá conta de linguagem e escolha de ferr
 As regras da skill do piloto (`SKILL.md`, invariantes, playbooks, glossário, limitações, formato de resposta, tipos de pergunta) foram divididas em 41 trechos por seção e indexadas com `nomic-embed-text` (Ollama) na tabela `semantic.skill_chunks` do ClickHouse. A cada pergunta entram os trechos mais próximos, até 3.000 caracteres, com uma nota que traduz os comandos do motor de linha de comando para as ferramentas deste agente. `cli.md` e os YAML ficam fora. Só conteúdo da skill é vetorizado, nenhum dado de cliente.
 
 ```bash
-python3 agent/context.py index                       # reindexar depois de mudar a skill
-python3 agent/context.py search "qual o nosso CSAT?"  # ver o que seria recuperado
+python3 -m solvis_tools.core.skill_index index                        # reindexar depois de mudar a skill
+python3 -m solvis_tools.core.skill_index search "qual o nosso CSAT?"  # ver o que seria recuperado
 AGENT_CONTEXT=0 ...                                   # desliga o contexto (padrão: ligado)
 ```
 

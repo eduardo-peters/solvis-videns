@@ -21,8 +21,23 @@ Recortes (by): unit, hour, channel, completion, survey (só volume) ou nome da p
 Métricas: evaluation_count, nps, scale_mean, choice_share.
 """
 import re
+from types import SimpleNamespace
 
-import agent as A
+from .db import ch
+from .errors import ToolError
+from .periods import resolve_dates
+from .resolve import _fold, _round_nps, coverage, resolve_group_by, resolve_question, resolve_survey
+
+
+def _t_choice_share(args):
+    from ..tools.choice_share import choice_share
+    return choice_share(args)
+
+
+# Mesmos nomes do módulo antigo (agent.*), para o corpo das funções não mudar.
+A = SimpleNamespace(ch=ch, ToolError=ToolError, resolve_dates=resolve_dates, coverage=coverage, _fold=_fold,
+                    _round_nps=_round_nps, resolve_group_by=resolve_group_by, resolve_question=resolve_question,
+                    resolve_survey=resolve_survey, t_choice_share=_t_choice_share)
 
 KINDS = ("bar", "hbar", "line", "area", "combo", "stacked", "donut", "histogram", "scatter", "heatmap", "profile")
 METRICS = ("evaluation_count", "nps", "scale_mean", "choice_share")
@@ -57,6 +72,15 @@ def _scope(args, metric):
     start, end = A.resolve_dates(args)
     p = {"a": start, "b": end}
     out = {"period": {"start": start, "end": end}, "coverage": A.coverage(start, end)}
+    if metric != "evaluation_count" and not args.get("survey"):
+        # Sem pesquisa citada: se só uma tem avaliações no período, usa e declara (SKILL.md, passo 3).
+        rows = A.ch("SELECT s.name AS name FROM raw.evaluations AS e INNER JOIN raw.surveys AS s ON "
+                    "s.survey_id = e.survey_id WHERE e.day BETWEEN {a:Date} AND {b:Date} GROUP BY name", p)
+        if len(rows) != 1:
+            opts = "; ".join(r["name"] for r in rows[:8]) or "nenhuma com avaliações no período"
+            raise A.ToolError(f"informe a pesquisa. Pesquisas com avaliações no período: {opts}")
+        args["survey"] = rows[0]["name"]
+        out["survey_note"] = f"pesquisa não citada; usada a única com avaliações no período: {rows[0]['name']}"
     if metric != "evaluation_count" or args.get("survey"):  # survey_only: pesquisa sem pergunta (profile)
         p["s"], out["survey"] = A.resolve_survey(args)
     if metric in ("nps", "scale_mean", "choice_share"):
@@ -171,6 +195,19 @@ def build(args):
             re.search(r"volume|quantidade|respostas e|avalia[cç][oõ]es e", uq, re.I) and \
             re.search(r"hora", uq, re.I):
         kind, args = "combo", {k: v for k, v in args.items() if k not in ("by", "metric")}
+    if uq:  # o pedido do usuário manda: o modelo pequeno às vezes repete o tipo de um pedido anterior
+        asked_heat = re.search(r"heat ?map|mapa de calor|calor", uq, re.I)
+        if kind == "heatmap" and not asked_heat:
+            kind = "hbar" if re.search(r"top|ranking|melhores|piores|maiores|superior", uq, re.I) else "bar"
+            args = {k: v for k, v in args.items() if k != "by"}
+            args["by"] = "unit" if re.search(r"unidade|loja", uq, re.I) else args.get("by")
+        elif asked_heat and kind != "heatmap":
+            kind = "heatmap"
+        if re.search(r"\bnps\b|recomenda", uq, re.I) and str(args.get("metric") or "evaluation_count") == "evaluation_count" \
+                and kind not in ("combo", "scatter", "histogram", "stacked"):
+            if not re.search(r"volume|quantidade|respostas e|avalia[cç][oõ]es e", uq, re.I):
+                args["metric"] = "nps"
+
     if kind not in KINDS:
         raise A.ToolError(f"kind aceita: {', '.join(KINDS)}")
     metric = str(args.get("metric") or {"stacked": "nps", "histogram": "nps", "scatter": "nps", "combo": "nps",
@@ -186,7 +223,7 @@ def build(args):
     min_n = int(args["min_n"]) if str(args.get("min_n") or "").isdigit() else SMALL_N
     scope_metric = {"combo": "nps", "scatter": "nps", "profile": "survey_only"}.get(kind, metric)
     p, out = _scope(args, scope_metric)
-    notes = []
+    notes = [out["survey_note"]] if out.get("survey_note") else []
 
     if kind == "heatmap":
         return {**out, **_heatmap(metric, args, p, top, min_n)}

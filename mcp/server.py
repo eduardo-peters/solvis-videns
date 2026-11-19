@@ -17,7 +17,7 @@ import time
 import uuid
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import solvis_tools as lib  # noqa: E402
 
 SERVER = {"name": "solvis-analytics-local", "version": "0.1.0"}

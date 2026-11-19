@@ -38,412 +38,34 @@ MLX_URL = os.environ.get("MLX_URL", "http://127.0.0.1:8090")
 METRIC_TOOLS = ("nps", "choice_share", "scale_mean", "evaluation_count", "chart")
 
 
-class ToolError(Exception):
-    pass
+# ---------------------------------------------------------------- tools (solvis_tools/)
+# As tools vivem em solvis_tools/tools/, uma por arquivo. O agente usa as do perfil analyst que
+# calculam métricas e catálogo; os nomes abaixo continuam exportados para os testes e o MCP.
+import sys as _sys  # noqa: E402
+_sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import solvis_tools as _lib  # noqa: E402
+from solvis_tools.core.db import ch  # noqa: E402,F401
+from solvis_tools.core.errors import ToolError  # noqa: E402,F401
+from solvis_tools.core.periods import PRESETS, resolve_dates, resolve_period  # noqa: E402,F401
+from solvis_tools.core.resolve import (METRIC_TYPES, _fold, _pick, _round_nps, coverage,  # noqa: E402,F401
+                                       resolve_group_by, resolve_question, resolve_survey)
+
+AGENT_TOOLS = ("nps", "scale_mean", "choice_share", "evaluation_count", "chart", "list_surveys", "list_questions",
+               "list_unit_properties", "data_coverage")
 
 
-# ---------------------------------------------------------------- ClickHouse
-
-def ch(sql, params=None):
-    """SQL fixo com parâmetros tipados ({nome:Tipo}); devolve lista de dicts."""
-    qs = {"default_format": "JSON"}
-    for k, v in (params or {}).items():
-        qs["param_" + k] = str(v)
-    req = urllib.request.Request(CH_URL + "/?" + urllib.parse.urlencode(qs), data=sql.encode(), method="POST")
-    req.add_header("X-ClickHouse-User", CH_USER)
-    req.add_header("X-ClickHouse-Key", CH_PW_FILE.read_text().strip())
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())["data"]
-    except urllib.error.HTTPError as e:
-        raise ToolError("clickhouse: " + e.read().decode()[:300])
+def _bind(name):
+    return lambda args: _lib.call("analyst", name, args, strict=False)
 
 
-# ---------------------------------------------------------------- períodos
-
-PRESETS = {"ontem": "yesterday", "yesterday": "yesterday", "hoje": "today", "today": "today",
-           "last_7_days": "last_7_days", "ultimos_7_dias": "last_7_days", "this_month": "this_month",
-           "este_mes": "this_month", "last_month": "last_month", "mes_passado": "last_month"}
-
-
-def resolve_period(preset):
-    """Preset -> (start, end). O modelo nunca faz conta de data."""
-    t = dt.date.fromisoformat(TODAY)
-    raw = str(preset).strip().lower()
-    m = re.fullmatch(r"month:(\d{4})-(\d{2})", raw)
-    if m:
-        first = dt.date(int(m.group(1)), int(m.group(2)), 1)
-        nxt = (first + dt.timedelta(days=32)).replace(day=1)
-        return first.isoformat(), (nxt - dt.timedelta(days=1)).isoformat()
-    key = PRESETS.get(raw)
-    if key == "today":
-        return t.isoformat(), t.isoformat()
-    if key == "yesterday":
-        y = t - dt.timedelta(days=1)
-        return y.isoformat(), y.isoformat()
-    if key == "last_7_days":
-        return (t - dt.timedelta(days=7)).isoformat(), (t - dt.timedelta(days=1)).isoformat()
-    if key == "this_month":
-        return t.replace(day=1).isoformat(), t.isoformat()
-    if key == "last_month":
-        last = t.replace(day=1) - dt.timedelta(days=1)
-        return last.replace(day=1).isoformat(), last.isoformat()
-    raise ToolError("period aceita yesterday, today, last_7_days, this_month, last_month ou month:AAAA-MM")
-
-
-def resolve_dates(args):
-    if args.get("period"):
-        return resolve_period(args["period"])
-    for k in ("start", "end"):  # o modelo às vezes manda o preset no lugar da data
-        if str(args.get(k, "")).strip().lower() in PRESETS:
-            return resolve_period(args[k])
-    try:
-        s, e = dt.date.fromisoformat(str(args["start"])), dt.date.fromisoformat(str(args["end"]))
-    except (KeyError, ValueError):
-        raise ToolError("informe period (ex.: yesterday, month:2026-10) ou start/end AAAA-MM-DD")
-    if s > e:
-        raise ToolError("start depois de end")
-    return s.isoformat(), e.isoformat()
-
-
-# ---------------------------------------------------------------- resolução de nomes
-
-METRIC_TYPES = {"nps": ("NPS",), "scale_mean": ("Scale",), "choice_share": ("Scale", "Multiple Choice")}
-
-
-def _fold(t):
-    t = unicodedata.normalize("NFKD", str(t)).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"<[^>]+>|[^a-z0-9 ]", " ", t).split()
-
-
-def _pick(candidates, text, label, key, name_key):
-    """Exato > todas as palavras > alguma palavra. Empate vira erro com as opções."""
-    words = _fold(text)
-    if not words:
-        raise ToolError(f"informe {label}")
-    scored = []
-    for c in candidates:
-        cw = _fold(c[name_key])
-        if cw == words:
-            scored.append((3, c))
-        elif all(w in cw for w in words):
-            scored.append((2, c))
-        elif any(w in cw for w in words if len(w) > 3):
-            scored.append((1, c))
-    if not scored:
-        raise ToolError(f"{label} '{text}' não encontrado(a)")
-    best = max(sc for sc, _ in scored)
-    top = [c for sc, c in scored if sc == best]
-    if len(top) > 1 and best < 3:
-        opts = "; ".join(c[name_key][:50] for c in top[:8])
-        raise ToolError(f"{label} '{text}' é ambíguo(a). Pergunte ao usuário qual destas: {opts}")
-    return top[0]
-
-
-def resolve_survey(args):
-    text = args.get("survey") or args.get("survey_name") or args.get("search") or ""
-    rows = ch("SELECT survey_id, name, archived FROM raw.surveys ORDER BY archived, last_evaluation_date DESC")
-    active = [r for r in rows if not int(r["archived"])]
-    try:
-        hit = _pick(active, text, "pesquisa", "survey_id", "name")
-    except ToolError:
-        hit = _pick(rows, text, "pesquisa", "survey_id", "name")
-    return int(hit["survey_id"]), hit["name"]
-
-
-def resolve_question(metric, survey, args):
-    rows = ch("SELECT question_id, number, answer_type, text FROM raw.questions WHERE survey_id = {s:UInt32} "
-              "ORDER BY number", {"s": survey})
-    typed = [r for r in rows if r["answer_type"] in METRIC_TYPES[metric]]
-    valid = "; ".join(f"{r['number']}: {re.sub('<[^>]+>', ' ', r['text'])[:45]}" for r in typed[:10])
-    text = str(args.get("question") or "").strip()
-    m = re.fullmatch(r"(pergunta\s*)?(\d{1,3})", text, re.I) or re.match(r"()(\d{1,3})\.\s", text)
-    if m:
-        hit = [r for r in rows if int(r["number"]) == int(m.group(2))]
-        if not hit:
-            raise ToolError(f"não há pergunta {m.group(2)}. Perguntas válidas para {metric}: {valid}")
-        q = hit[0]
-    elif not text and metric != "nps" and args.get("_user_q"):
-        # o modelo esqueceu a pergunta: tenta pelas palavras do pedido, só entre as do tipo certo
-        words = [w for w in _fold(args["_user_q"]) if len(w) > 4]
-        hits = [r for r in typed if any(w in _fold(r["text"]) for w in words)]
-        if len(hits) != 1:
-            raise ToolError(f"informe a pergunta. Perguntas válidas para {metric}: {valid or 'nenhuma'}")
-        q = hits[0]
-    elif not text and metric == "nps" and args.get("_user_q") and not re.search(r"recomend", args["_user_q"], re.I):
-        # "NPS da pergunta de Atendimento": o usuário citou outra pergunta pelo nome
-        words = [w for w in _fold(args["_user_q"]) if len(w) > 4 and w not in ("pesquisa", "pergunta", "ontem")]
-        others = [r for r in rows if r not in typed and any(w in _fold(r["text"]) for w in words)]
-        if others and not any(any(w in _fold(r["text"]) for w in words) for r in typed):
-            q = others[0]
-        elif len(typed) == 1:
-            q = typed[0]
-        else:
-            raise ToolError(f"informe a pergunta. Perguntas válidas para {metric}: {valid or 'nenhuma'}")
-    elif not text or (metric == "nps" and _fold(text) in (["nps"], ["recomendacao"])):
-        if len(typed) != 1:
-            raise ToolError(f"informe a pergunta. Perguntas válidas para {metric}: {valid or 'nenhuma'}")
-        q = typed[0]
-    else:
-        try:  # primeiro só entre as perguntas do tipo certo para a métrica
-            q = _pick(typed, text, "pergunta", "question_id", "text")
-        except ToolError as typed_err:
-            if "ambíguo" in str(typed_err):
-                raise ToolError(f"{typed_err}")
-            words = _fold(text)
-            others = [r for r in rows if r not in typed and any(w in _fold(r["text"]) for w in words if len(w) > 3)]
-            if not others:
-                raise ToolError(f"pergunta '{text}' não encontrada. Perguntas válidas para {metric}: {valid or 'nenhuma'}")
-            q = others[0]
-    if q["answer_type"] not in METRIC_TYPES[metric]:
-        ok = [m_ for m_, ts in METRIC_TYPES.items() if q["answer_type"] in ts]
-        raise ToolError(f"A pergunta {q['number']} ('{q['text'][:50]}') é do tipo {q['answer_type']}: "
-                        f"{metric} não existe para ela. Diga isso ao usuário. "
-                        f"Métricas que existem para ela: {', '.join(ok) or 'nenhuma numérica'}.")
-    return int(q["question_id"]), int(q["number"]), re.sub("<[^>]+>", " ", q["text"])
-
-
-def resolve_group_by(raw):
-    gb = str(raw or "none").strip()
-    if _fold(gb) in ([], ["none"], ["total"], ["geral"], ["all"], ["todos"], ["todas"]):
-        return "none", None
-    if _fold(gb)[0] in ("unit", "unidade", "unidades", "loja", "lojas"):
-        return "unit", None
-    rows = ch("SELECT name_id AS property_id, any(name) AS name FROM raw.unit_properties GROUP BY name_id")
-    m = re.fullmatch(r"property:(\d+)", gb)
-    if m:
-        hit = [r for r in rows if int(r["property_id"]) == int(m.group(1))]
-        if not hit:
-            raise ToolError("propriedade inexistente; use o nome, ex.: group_by='Regional'")
-        return "property", hit[0]
-    return "property", _pick(rows, re.sub(r"^property:", "", gb), "propriedade", "property_id", "name")
-
-
-def _round_nps(raw):
-    return int(raw + 0.5) if raw >= 0 else -int(-raw + 0.5)
-
-
-# ---------------------------------------------------------------- ferramentas
-
-def coverage(start, end):
-    """Dias do período com dados carregados no protótipo. A resposta precisa dizer quando é parcial."""
-    days = ch("SELECT uniqExact(day) AS d, min(day) AS first, max(day) AS last FROM raw.evaluations "
-              "WHERE day BETWEEN {a:Date} AND {b:Date}", {"a": start, "b": end})[0]
-    expected = (dt.date.fromisoformat(end) - dt.date.fromisoformat(start)).days + 1
-    c = {"days_in_period": expected, "days_with_data": int(days["d"])}
-    if int(days["d"]) and int(days["d"]) < expected:
-        c["warning"] = (f"Só há dados de {days['first']} a {days['last']} neste período. "
-                        f"Diga ao usuário que o resultado cobre só esses dias.")
-    return c
-
-
-def t_list_surveys(args):
-    return ch("SELECT name, archived, last_evaluation_date FROM raw.surveys "
-              "WHERE positionCaseInsensitiveUTF8(name, {s:String}) > 0 "
-              "ORDER BY archived, last_evaluation_date DESC LIMIT 20", {"s": str(args.get("search") or "")[:80]})
-
-
-def t_list_questions(args):
-    survey, name = resolve_survey(args)
-    return {"survey": name, "questions": ch(
-        "SELECT number, answer_type, text FROM raw.questions WHERE survey_id = {s:UInt32} ORDER BY number",
-        {"s": survey})}
-
-
-def t_list_unit_properties(args):
-    return ch("SELECT any(name) AS name, uniqExact(value_id) AS values FROM raw.unit_properties "
-              "GROUP BY name_id ORDER BY name")
-
-
-def t_data_coverage(args):
-    return ch("SELECT s.name AS survey, min(e.day) AS first_day, max(e.day) AS last_day, count() AS evaluations "
-              "FROM raw.evaluations e LEFT JOIN raw.surveys s ON s.survey_id = e.survey_id GROUP BY s.name")
-
-
-def _question_scope(metric, args):
-    survey, sname = resolve_survey(args)
-    qid, number, qtext = resolve_question(metric, survey, args)
-    start, end = resolve_dates(args)
-    scope = {"survey": sname, "question": f"{number}. {qtext[:80]}", "period": {"start": start, "end": end},
-             "coverage": coverage(start, end)}
-    return {"survey": survey, "question": qid, "start": start, "end": end}, scope
-
-
-BASE = "survey={survey:UInt32}, question={question:UInt32}, start={start:Date}, end={end:Date}"
-
-
-def t_nps(args):
-    p, scope = _question_scope("nps", args)
-    kind, prop = resolve_group_by(args.get("group_by"))
-    scope["group_by"] = prop["name"] if prop else kind
-    total = ch(f"SELECT sum(promoters) AS promoters, sum(passives) AS passives, sum(detractors) AS detractors, "
-               f"sum(n) AS n FROM semantic.nps_by_unit({BASE})", p)[0]
-    n = int(total["n"])
-    if n == 0:
-        return {**scope, "rows": [], "note": "sem avaliações no período"}
-    total["nps"] = _round_nps(100.0 * (int(total["promoters"]) / n - int(total["detractors"]) / n))
-    out = {**scope, "total": total,
-           "total_note": "total = NPS geral do conjunto, calculado pelas contagens (não é média das linhas)"}
-    if kind == "unit":  # todas as unidades; o corte para o modelo vem depois de achar pior e melhor
-        out["rows"] = ch(f"SELECT u.name AS unit, v.nps AS nps, v.n AS n FROM semantic.nps_by_unit({BASE}) v "
-                         f"LEFT JOIN raw.units u ON u.unit_id = v.unit_id ORDER BY nps, n DESC", p)
-    elif kind == "property":
-        out["rows"] = ch(f"SELECT value, nps, n FROM semantic.nps_by_unit_property({BASE}, property={{property:UInt32}}) "
-                         f"ORDER BY nps, n DESC", {**p, "property": int(prop["property_id"])})
-    else:
-        out["rows"] = [total]
-    min_n = int(args.get("min_n") or 0) if str(args.get("min_n") or "0").isdigit() else 0
-    if min_n and kind != "none":
-        hidden = [r for r in out["rows"] if int(r["n"]) < min_n]
-        out["rows"] = [r for r in out["rows"] if int(r["n"]) >= min_n]
-        out["hidden_rows_below_min_n"] = len(hidden)
-    for r in out["rows"]:
-        if int(r["n"]) < 30:
-            r["small_sample"] = True
-    if len(out["rows"]) > 1:
-        out["worst"], out["best"] = out["rows"][0], out["rows"][-1]
-        reliable = [r for r in out["rows"] if int(r["n"]) >= 30]
-        if reliable and (out["worst"].get("small_sample") or out["best"].get("small_sample")):
-            out["worst_with_n_30"], out["best_with_n_30"] = reliable[0], reliable[-1]
-    small = [r for r in out["rows"] if r.get("small_sample")]
-    if small:
-        out["small_sample_rows"] = len(small)
-    if len(out["rows"]) > 30:  # pior e melhor já foram calculados sobre todas as linhas
-        out["rows_total"] = len(out["rows"])
-        out["rows"] = out["rows"][:15] + out["rows"][-15:]
-        out["rows_note"] = f"mostrando as 15 piores e as 15 melhores de {out['rows_total']}"
-    return out
-
-
-def t_choice_share(args):
-    p, scope = _question_scope("choice_share", args)
-    rows = ch(f"SELECT letter, text, answers, share_pct, n FROM semantic.choice_share({BASE}) ORDER BY letter", p)
-    return {**scope, "rows": rows} if rows else {**scope, "rows": [], "note": "sem avaliações no período"}
-
-
-def t_scale_mean(args):
-    p, scope = _question_scope("scale_mean", args)
-    r = ch(f"SELECT n, mean_raw FROM semantic.scale_mean({BASE})", p)[0]
-    if int(r["n"]) == 0:
-        return {**scope, "rows": [], "note": "sem avaliações no período"}
-    return {**scope, "rows": [{"mean": round(float(r["mean_raw"]), 2), "n": r["n"]}]}
-
-
-def t_evaluation_count(args):
-    """Volume. Sem survey: todas as pesquisas. group_by: none, survey, unit ou propriedade."""
-    start, end = resolve_dates(args)
-    p = {"a": start, "b": end}
-    where = "e.day BETWEEN {a:Date} AND {b:Date}"
-    sname = None
-    if args.get("survey"):
-        p["s"], sname = resolve_survey(args)
-        where += " AND e.survey_id = {s:UInt32}"
-    gb = str(args.get("group_by") or "none")
-    out = {"survey_filter": sname or "nenhum (todas as pesquisas)", "period": {"start": start, "end": end},
-           "coverage": coverage(start, end)}
-    total = ch(f"SELECT count() AS evaluations FROM raw.evaluations AS e WHERE {where}", p)
-    out["total"] = total[0]
-    if _fold(gb) and _fold(gb)[0] in ("survey", "pesquisa", "pesquisas"):
-        out["group_by"] = "pesquisa"
-        out["rows"] = ch(f"SELECT s.name AS survey, count() AS evaluations FROM raw.evaluations AS e "
-                         f"LEFT JOIN raw.surveys AS s ON s.survey_id = e.survey_id WHERE {where} "
-                         f"GROUP BY s.name ORDER BY evaluations DESC LIMIT 20", p)
-        return out
-    kind, prop = resolve_group_by(gb)
-    out["group_by"] = prop["name"] if prop else kind
-    if kind == "unit":
-        out["rows"] = ch(f"SELECT u.name AS unit, count() AS evaluations FROM raw.evaluations AS e "
-                         f"LEFT JOIN raw.units AS u ON u.unit_id = e.unit_id WHERE {where} "
-                         f"GROUP BY u.name ORDER BY evaluations DESC LIMIT 20", p)
-        out["rows_note"] = "só as 20 com mais avaliações; a lista não mostra a de menos avaliações"
-    elif kind == "property":
-        p["prop"] = int(prop["property_id"])
-        out["rows"] = ch(f"SELECT pr.value AS value, count() AS evaluations FROM raw.evaluations AS e "
-                         f"INNER JOIN raw.unit_properties AS pr ON pr.unit_id = e.unit_id AND pr.name_id = {{prop:UInt32}} "
-                         f"WHERE {where} GROUP BY pr.value ORDER BY evaluations DESC", p)
-    else:
-        out["rows"] = total
-    if len(out["rows"]) > 1:
-        out["most"] = dict(out["rows"][0])
-        out["rows"] = out["rows"][:10]
-        if kind == "unit":  # de qual pesquisa vieram as respostas da loja do topo
-            out["most"]["surveys"] = ch(
-                f"SELECT s.name AS survey, count() AS evaluations FROM raw.evaluations AS e "
-                f"LEFT JOIN raw.surveys AS s ON s.survey_id = e.survey_id "
-                f"LEFT JOIN raw.units AS u ON u.unit_id = e.unit_id WHERE {where} AND u.name = {{u:String}} "
-                f"GROUP BY s.name ORDER BY evaluations DESC", {**p, "u": out["most"]["unit"]})
-    return out
-
-
-def t_evaluation_heatmap(args):
-    """Mapa de calor: N unidades com mais avaliações (linhas) × hora local de início (colunas)."""
-    start, end = resolve_dates(args)
-    top = max(1, min(int(args.get("top") or 10) if str(args.get("top") or "10").isdigit() else 10, 30))
-    p = {"a": start, "b": end, "top": top}
-    where = "e.day BETWEEN {a:Date} AND {b:Date}"
-    sname = None
-    if args.get("survey"):
-        p["s"], sname = resolve_survey(args)
-        where += " AND e.survey_id = {s:UInt32}"
-    rows = ch(f"SELECT u.name AS unit, toHour(e.started_at) AS hour, count() AS evaluations "
-              f"FROM raw.evaluations AS e LEFT JOIN raw.units AS u ON u.unit_id = e.unit_id "
-              f"WHERE {where} AND e.unit_id IN (SELECT unit_id FROM raw.evaluations AS e WHERE {where} "
-              f"GROUP BY unit_id ORDER BY count() DESC LIMIT {{top:UInt8}}) GROUP BY unit, hour", p)
-    if not rows:
-        return {"survey_filter": sname or "todas as pesquisas", "period": {"start": start, "end": end},
-                "coverage": coverage(start, end), "rows": [], "note": "sem avaliações no período"}
-    totals = {}
-    for r in rows:
-        totals[r["unit"]] = totals.get(r["unit"], 0) + int(r["evaluations"])
-    units = sorted(totals, key=lambda u: -totals[u])
-    hours = list(range(min(int(r["hour"]) for r in rows), max(int(r["hour"]) for r in rows) + 1))
-    cell = {(r["unit"], int(r["hour"])): int(r["evaluations"]) for r in rows}
-    matrix = [[cell.get((u, h), 0) for h in hours] for u in units]
-    peak = max(max(row) for row in matrix)
-    return {"survey_filter": sname or "todas as pesquisas", "period": {"start": start, "end": end},
-            "coverage": coverage(start, end), "chart": "heatmap", "basis": "hora local de início da avaliação",
-            "x": hours, "y": units, "matrix": matrix, "max": peak,
-            "rows": [{"unit": u, "evaluations": totals[u]} for u in units],
-            "summary": {"units": len(units), "hours": f"{hours[0]}h a {hours[-1]}h"}}
-
-
-def t_chart(args):
-    """Gráficos: ver agent/charts.py (tipos, métricas, recortes)."""
-    import charts
-    return charts.build(args)
-
-
-S = "string"
-PERIOD = {"period": S, "start": S, "end": S}
-TOOLS = {
-    "nps": (t_nps, "NPS de uma pesquisa. survey = nome da pesquisa; question = texto ou número da pergunta "
-                   "(opcional se a pesquisa tem uma só NPS); group_by = none, unit ou nome da propriedade "
-                   "(Regional, Formato da loja, HUB...); min_n esconde linhas com menos respostas.",
-            {"survey": S, "question": S, "group_by": S, "min_n": "integer", **PERIOD}, ["survey"]),
-    "scale_mean": (t_scale_mean, "Média de uma pergunta de escala (ex.: estrelas). survey = nome; "
-                                 "question = texto ou número da pergunta.",
-                   {"survey": S, "question": S, **PERIOD}, ["survey", "question"]),
-    "choice_share": (t_choice_share, "Distribuição (%) das alternativas de uma pergunta de escala ou escolha. "
-                                     "survey = nome; question = texto ou número da pergunta.",
-                     {"survey": S, "question": S, **PERIOD}, ["survey", "question"]),
-    "evaluation_count": (t_evaluation_count, "Quantidade de avaliações (respostas). survey = nome (opcional: sem ele, "
-                                             "todas as pesquisas); group_by = none, survey, unit ou propriedade. "
-                                             "Use para 'qual loja/pesquisa teve mais respostas'.",
-                         {"survey": S, "group_by": S, **PERIOD}, []),
-    "chart": (t_chart, "Gráfico desenhado pela tela. kind: bar, hbar (ranking), line ou area (por hora), combo "
-                       "(volume + NPS por hora), stacked (promotores/neutros/detratores), donut, histogram (notas "
-                       "0-10), scatter (unidades: respostas × NPS), heatmap (unidades × hora), profile (média de cada "
-                       "pergunta de escala). metric: evaluation_count, nps, scale_mean, choice_share. by: unit, hour, "
-                       "channel, completion, survey ou nome da propriedade (Regional...). Use sempre que pedirem "
-                       "gráfico, visualização, mapa de calor, curva, ranking visual.",
-              {"kind": S, "metric": S, "by": S, "survey": S, "question": S, "top": "integer", "min_n": "integer",
-               **PERIOD}, []),
-    "list_surveys": (t_list_surveys, "Busca pesquisas pelo nome.", {"search": S}, []),
-    "list_questions": (t_list_questions, "Lista as perguntas de uma pesquisa. survey = nome.", {"survey": S},
-                       ["survey"]),
-    "list_unit_properties": (t_list_unit_properties, "Lista propriedades de unidade (Regional, Formato...).", {}, []),
-    "data_coverage": (t_data_coverage, "Dias com dados carregados por pesquisa.", {}, []),
-}
+TOOLS = {}
+for _n in AGENT_TOOLS:
+    _t = _lib.REGISTRY[_n]
+    TOOLS[_n] = (_bind(_n), _t["model_hint"] or _t["description"],
+                 {k: v["type"] for k, v in _t["input_schema"]["properties"].items()}, _t["input_schema"]["required"])
+# Atalhos t_<tool>(args) usados pelos testes.
+t_nps, t_scale_mean, t_choice_share, t_evaluation_count, t_chart, t_list_surveys, t_list_questions, \
+    t_list_unit_properties, t_data_coverage = (TOOLS[n][0] for n in AGENT_TOOLS)
 
 
 def tool_schemas():
@@ -464,11 +86,11 @@ Regras:
    "qual loja teve mais respostas?" -> evaluation_count(group_by="unit", period="last_7_days")
    "qual pesquisa teve mais respostas?" -> evaluation_count(group_by="survey", period="last_7_days")
    "mapa de calor das top 10 unidades por hora" -> chart(kind="heatmap", top=10, period="yesterday")
-   "gráfico do NPS por regional" -> chart(kind="bar", metric="nps", by="Regional", survey="...", period="...")
-   "curva de respostas por hora" -> chart(kind="line", metric="evaluation_count", by="hour", period="...")
-   "composição do NPS por regional" -> chart(kind="stacked", by="Regional", survey="...", period="...")
-   "notas 0 a 10" -> chart(kind="histogram", survey="..."); "volume × NPS das lojas" -> chart(kind="scatter", survey="...")
-   "notas de todas as perguntas" -> chart(kind="profile", survey="..."); "NPS e volume por hora" -> chart(kind="combo", survey="...")
+   "gráfico do NPS por regional" -> chart(kind="bar", metric="nps", by="Regional", survey="Satisfação", period="yesterday")
+   "curva de respostas por hora" -> chart(kind="line", metric="evaluation_count", by="hour", period="yesterday")
+   "composição do NPS por regional" -> chart(kind="stacked", by="Regional", survey="Satisfação", period="yesterday")
+   "notas 0 a 10" -> chart(kind="histogram", survey="Satisfação"); "volume × NPS das lojas" -> chart(kind="scatter", survey="Satisfação")
+   "notas de todas as perguntas" -> chart(kind="profile", survey="Satisfação"); "NPS e volume por hora" -> chart(kind="combo", survey="Satisfação")
    Com gráfico, a tela já mostra os valores: descreva o padrão (pico, horários fortes) em uma ou duas frases.
    Se o usuário pedir para não ver números, não escreva números.
    "pior loja em NPS" -> nps(survey=..., group_by="unit", min_n=30)   (ranking de nota nunca é volume)
@@ -641,7 +263,7 @@ NO_NUMBERS = re.compile(r"(n[aã]o|sem) (quero )?(ver )?(os )?n[uú]meros|apenas
 
 
 def chart_caption(c):
-    import charts
+    from solvis_tools.core import charts
     return charts.caption(c)
 
 
@@ -712,6 +334,64 @@ def unsupported_notes(q):
     return [msg for rx, msg in UNSUPPORTED if rx.search(q)]
 
 
+FOLLOW_UP = re.compile(r"^(e|e agora|agora|e por|e no|e na|e o|e a|mesmo|isso|esse|essa|também|tamb[eé]m)\b"
+                       r"|^(por|no|na|em|só|apenas)\b", re.I)
+TYPOS = [(re.compile(r"\b(o|do|de|no|um|seu|meu|nosso) nos\b", re.I), r"\1 NPS"),
+         (re.compile(r"\bnos (por|da|de|atual|geral|das|dos|ontem|hoje)\b", re.I), r"NPS \1"),
+         (re.compile(r"\bnsp\b|\bnpss\b|\bnp s\b", re.I), "NPS")]
+
+
+def normalize_question(q):
+    """Corrige erros de digitação comuns em nomes de métrica ('o nos atual' -> 'o NPS atual')."""
+    for rx, rep in TYPOS:
+        q = rx.sub(rep, q)
+    return q
+
+
+def model_turns(history):
+    """Turnos que o modelo vê. Cada pergunta nova é um turno independente: o histórico inteiro fazia o
+    modelo pequeno repetir a chamada anterior (ex.: heatmap de novo num pedido de barras). Só uma
+    continuação curta ("e por Regional?") leva junto a pergunta anterior, como contexto em texto."""
+    users = [m["content"] for m in history if m["role"] == "user"]
+    if not users:
+        return [], ""
+    cur = normalize_question(users[-1])
+    if len(users) > 1 and FOLLOW_UP.search(cur.strip()) and len(cur.split()) <= 8:
+        prev = normalize_question(users[-2])
+        return [{"role": "user", "content": f"Pergunta anterior (contexto): {prev}\nPergunta atual: {cur}"}], cur
+    return [{"role": "user", "content": cur}], cur
+
+
+def follow_up_dimension(question):
+    """Recorte citado numa continuação ("e por Regional?"): o código aplica; o modelo pequeno repete o anterior."""
+    if not re.search(r"^\s*(e|e agora|agora)?\s*(por|no|na)\b", question, re.I):
+        return None
+    text = re.sub(r"^\s*(e|e agora|agora)?\s*(por|no|na)\s+", "", question, flags=re.I).strip(" ?.!")
+    f = _fold(text)
+    if not f:
+        return None
+    if f[0] in ("unidade", "unidades", "loja", "lojas"):
+        return "unit"
+    if f[0] in ("hora", "horas", "horario"):
+        return "hour"
+    if f[0] in ("canal", "canais"):
+        return "channel"
+    try:
+        _, prop = resolve_group_by(text)
+        return prop["name"] if prop else None
+    except ToolError:
+        return None
+
+
+TOP_N = re.compile(r"\btop\s*(?:n\s*)?(?:superior\s*)?(?:de\s*|a\s*)?(\d{1,2})\b"
+                   r"|\b(\d{1,2})\s+(?:melhores|piores|maiores|menores|primeir[ao]s|unidades|lojas)\b", re.I)
+
+
+def top_from_question(q):
+    m = TOP_N.search(q)
+    return int(m.group(1) or m.group(2)) if m else None
+
+
 def ask(history, source="cli"):
     """history: lista de {role, content}. Devolve a resposta e tudo o que aconteceu até ela.
 
@@ -719,7 +399,9 @@ def ask(history, source="cli"):
     """
     import time
     t0 = time.time()
-    question = history[-1]["content"] if history else ""
+    turns, question = model_turns(history)
+    if not turns:
+        turns, question = history, ""
     st = {"events": [], "trace": [], "table": None, "outputs": [], "context": []}
 
     def ev(guardrail, action, detail):
@@ -739,7 +421,7 @@ def ask(history, source="cli"):
 
     system = SYSTEM
     if USE_CONTEXT and question:
-        import context  # recuperação vetorial dos trechos da skill (agent/context.py)
+        from solvis_tools.core import skill_index as context  # trechos da skill por busca vetorial
         picked = context.retrieve(question, ch)
         system += context.render(picked)
         st["context"] = [f"{r['source']} · {r['heading']}" for r in picked]
@@ -747,7 +429,7 @@ def ask(history, source="cli"):
     if notes:
         system += "\n\nATENÇÃO, nesta pergunta: " + " ".join(notes) + " Diga isso na primeira frase."
     default_period = period_from_question(question)
-    messages = [{"role": "system", "content": system}] + history
+    messages = [{"role": "system", "content": system}] + turns
     trace, outputs, retried = st["trace"], st["outputs"], False
     for _ in range(MAX_STEPS):
         msg = ollama_chat(messages)
@@ -810,8 +492,19 @@ def ask(history, source="cli"):
             args = c["function"].get("arguments") or {}
             if isinstance(args, str):
                 args = json.loads(args or "{}")
-            if name in METRIC_TOOLS and default_period and not any(args.get(k) for k in ("period", "start", "end")):
-                args = {**args, "period": default_period}
+            if name in METRIC_TOOLS and not any(args.get(k) for k in ("period", "start", "end")):
+                args = {**args, "period": default_period or "last_7_days"}  # regra 7 do prompt
+            n_top = top_from_question(question)
+            if name == "chart" and n_top and str(args.get("top") or "") != str(n_top):
+                ev("top_n", "annotate", f"top: {args.get('top')} -> {n_top}")
+                args = {**args, "top": n_top}
+            follow = len(turns) == 1 and turns[0]["content"].startswith("Pergunta anterior")
+            dim = follow_up_dimension(question) if follow else None
+            if dim and name in ("chart", "nps", "evaluation_count"):
+                key = "by" if name == "chart" else "group_by"
+                if args.get(key) != dim:
+                    ev("follow_up", "annotate", f"{key}: {args.get(key)} -> {dim}")
+                    args = {**{k: v for k, v in args.items() if k not in ("by", "group_by")}, key: dim}
             call_args = {**args, "_user_q": question}
             try:
                 if name not in TOOLS:

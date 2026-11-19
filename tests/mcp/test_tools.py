@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 os.environ.setdefault("AGENT_TODAY", "2026-11-18")
 os.environ["AUDIT_DISABLED"] = "1"
-sys.path.insert(0, str(ROOT / "mcp"))
+sys.path.insert(0, str(ROOT))
 import solvis_tools as lib  # noqa: E402
 
 
@@ -42,8 +42,8 @@ class Registry(unittest.TestCase):
 
     def test_skill_ligada_existe(self):
         """Toda referência de skill aponta para uma regra ou arquivo que existe."""
-        from solvis_tools import engineer
-        inv = engineer._invariants()
+        from solvis_tools.core.skill import _invariants
+        inv = _invariants()
         refs = ROOT / "skills/solvis-survey-analysis-pilot/references"
         for n, t in lib.REGISTRY.items():
             for ref in t["skill"]:
@@ -55,8 +55,8 @@ class Registry(unittest.TestCase):
                     self.assertTrue(ok, f"{n}: {ref}")
 
     def test_catalogo_aponta_para_checagens_e_regras_reais(self):
-        from solvis_tools import engineer
-        inv = engineer._invariants()
+        from solvis_tools.core.skill import _invariants
+        inv = _invariants()
         src = (ROOT / "ops/pipeline.py").read_text()
         for f in json.loads((ROOT / "ops/metadata_catalog.json").read_text())["fields"]:
             if f["check"]:
@@ -67,6 +67,16 @@ class Registry(unittest.TestCase):
     def test_exemplos_respeitam_o_esquema(self):
         for n, t in lib.REGISTRY.items():
             lib.validate(t, dict(t["example"]))
+
+
+class Layout(unittest.TestCase):
+    """Uma tool por arquivo: o nome do arquivo é o nome da tool."""
+
+    def test_uma_tool_por_arquivo(self):
+        files = {p.stem for p in (ROOT / "solvis_tools/tools").glob("*.py") if not p.stem.startswith("_")}
+        self.assertEqual(files, set(lib.REGISTRY))
+        for n, t in lib.REGISTRY.items():
+            self.assertEqual(t["module"], f"solvis_tools.tools.{n}", n)
 
 
 class LeastPrivilege(unittest.TestCase):

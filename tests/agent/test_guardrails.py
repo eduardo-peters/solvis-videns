@@ -254,6 +254,74 @@ class ChartKindFixes(unittest.TestCase):
         self.assertEqual(out["chart"]["type"], "combo")
 
 
+class Turns(unittest.TestCase):
+    """Falha real (tela, 16:59): depois de um heatmap, 'gráfico do nos por unidade, top 10' virou heatmap de novo."""
+    HEAT = ("preciso visualizar um mapa de calor pelas top 10 unidades e hora de respostas. nao quero ver os "
+            "números, apenas o heatmap.")
+    ASK = "preciso de um grafico que me mostre o nos por unidade, quero ver o top N superior de 10"
+
+    def test_pergunta_nova_nao_leva_o_historico(self):
+        hist = [{"role": "user", "content": self.HEAT}, {"role": "assistant", "content": "Mapa de calor..."},
+                {"role": "user", "content": self.ASK}]
+        turns, q = agent.model_turns(hist)
+        self.assertEqual(len(turns), 1)
+        self.assertNotIn("mapa de calor", turns[0]["content"])
+        self.assertIn("NPS por unidade", q)
+
+    def test_continuacao_curta_leva_a_pergunta_anterior(self):
+        hist = [{"role": "user", "content": "Faz um gráfico do NPS por Regional ontem na Satisfação"},
+                {"role": "assistant", "content": "..."}, {"role": "user", "content": "e por Formato da loja?"}]
+        turns, _ = agent.model_turns(hist)
+        self.assertIn("Pergunta anterior", turns[0]["content"])
+
+    def test_modelo_repetindo_heatmap_vira_ranking_de_nps(self):
+        hist = [{"role": "user", "content": self.HEAT}, {"role": "assistant", "content": "Mapa de calor..."},
+                {"role": "user", "content": self.ASK}]
+        fake = Scripted(call("chart", kind="heatmap", top=10, group_by="unit", period="yesterday"))
+        agent.ollama_chat = fake
+        out = agent.ask(hist, source="test")
+        c = out["table"]["chart"]
+        self.assertEqual(c["type"], "hbar")
+        self.assertEqual(c["title"], "NPS por unidade")
+        self.assertEqual(len(c["labels"]), 10)
+        self.assertTrue(any("única com avaliações" in n for n in c.get("notes", [])))
+        self.assertNotIn("027 - Washington Soares", c["labels"])  # n = 2, abaixo do mínimo
+
+    def test_continuacao_troca_o_recorte_mesmo_se_o_modelo_repetir(self):
+        """Falha real: 'e por Regional?' repetiu o gráfico por unidade."""
+        hist = [{"role": "user", "content": self.ASK}, {"role": "assistant", "content": "NPS por unidade..."},
+                {"role": "user", "content": "e por Regional?"}]
+        agent.ollama_chat = Scripted(call("chart", kind="bar", metric="nps", by="unit", top=10, period="yesterday"))
+        out = agent.ask(hist, source="test")
+        self.assertEqual(out["table"]["chart"]["title"], "NPS por Regional")
+        self.assertEqual(events(out, "follow_up"), ["annotate"])
+
+    def test_pesquisa_marcador_usa_a_unica_com_dados(self):
+        """Falha real: o modelo copiou survey='...' do exemplo do prompt."""
+        out = agent.t_nps({"survey": "...", "period": "yesterday", "_user_q": "qual o NPS atual?"})
+        self.assertEqual(out["survey"], "Satisfação")
+        self.assertIn("única com dados", out["survey_note"])
+
+    def test_pergunta_longa_nao_e_continuacao(self):
+        hist = [{"role": "user", "content": self.HEAT}, {"role": "assistant", "content": "..."},
+                {"role": "user", "content": "qual o nos atual?"}]
+        turns, q = agent.model_turns(hist)
+        self.assertEqual(turns[0]["content"], "qual o NPS atual?")
+
+    def test_top_n_do_pedido_vale_mesmo_se_o_modelo_esquecer(self):
+        """Falha real: 'top N superior de 10' devolveu 15 linhas."""
+        agent.ollama_chat = Scripted(call("chart", kind="bar", metric="nps", by="unit", period="yesterday"))
+        out = agent.ask([{"role": "user", "content": self.ASK}], source="test")
+        self.assertEqual(len(out["table"]["chart"]["labels"]), 10)
+        self.assertEqual(agent.top_from_question("as 5 melhores lojas"), 5)
+        self.assertIsNone(agent.top_from_question("NPS por Regional"))
+
+    def test_typo_nos_vira_nps(self):
+        self.assertEqual(agent.normalize_question("qual o nos atual?"), "qual o NPS atual?")
+        self.assertEqual(agent.normalize_question("o nos por unidade"), "o NPS por unidade")
+        self.assertEqual(agent.normalize_question("nos vemos amanhã"), "nos vemos amanhã")
+
+
 class Heatmap(unittest.TestCase):
     Q = ("preciso visualizar um mapa de calor pelas top 10 unidades e hora de respostas, preenchido com a "
          "quantidade de respostas de cada unidade por hora. nao quero ver os números, apenas o heatmap.")

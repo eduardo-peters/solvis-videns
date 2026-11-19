@@ -34,7 +34,8 @@ LLM do cliente
 | `tests/agent/` | Testes dos guardrails e do isolamento do agente local, sem LLM | Não |
 | `tests/mcp/` | Testes da biblioteca de tools e do protocolo MCP, sem LLM | Não |
 | `clickhouse/` | Protótipo: schema, views semânticas (métricas), isolamento por cliente e carga a partir do cache do piloto | Não |
-| `mcp/` | Protótipo: servidor MCP stdio com biblioteca de tools por perfil de agente (`analyst`, `data_engineer`); gera `docs/tools.md` | Não |
+| `solvis_tools/` | Protótipo: biblioteca de tools, uma por arquivo em `tools/`, núcleo compartilhado em `core/` | Não |
+| `mcp/` | Protótipo: servidor MCP stdio por perfil de agente (`analyst`, `data_engineer`); gera `docs/tools.md` | Não |
 | `ops/` | Protótipo: auditoria em `ops.*`, saúde dos dados, metodologia da skill por resposta e portão de qualidade | Não |
 | `agent/` | Protótipo: agente com modelo local, ferramentas fixas, guardrails, contexto da skill por busca vetorial, tela no navegador e avaliação | Não |
 | `docs/` | Plano, arquitetura, decisões (ADRs), requisitos para o backend, distribuição, perguntas em aberto; `docs/pilot/` para o piloto | Não |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gera docs/tools.md a partir do registro de tools (mcp/solvis_tools).
+"""Gera docs/tools.md a partir do registro de tools (solvis_tools/).
 
   python3 mcp/gen_docs.py           escreve docs/tools.md
   python3 mcp/gen_docs.py --check   falha se docs/tools.md está desatualizado (usado nos testes)
@@ -8,7 +8,7 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import solvis_tools as lib  # noqa: E402
 
 OUT = lib.ROOT / "docs" / "tools.md"
@@ -19,7 +19,7 @@ ACCESS = {"client": "`assai_agent`: views semânticas e dimensões do cliente; s
 
 def render():
     L = ["# Biblioteca de tools", "",
-         "Gerado por `python3 mcp/gen_docs.py` a partir de `mcp/solvis_tools/`. Não edite à mão: o teste "
+         "Gerado por `python3 mcp/gen_docs.py` a partir de `solvis_tools/` (uma tool por arquivo em `solvis_tools/tools/`). Não edite à mão: o teste "
          "`tests/mcp` falha se este arquivo e o código divergirem.", "",
          "Cada perfil de agente roda uma instância do servidor MCP (`python3 mcp/server.py --agent <perfil>`) e "
          "enxerga só as próprias tools. Todas são somente leitura. Como a engenharia funciona: "
@@ -37,6 +37,7 @@ def render():
     for n, t in lib.REGISTRY.items():
         sch = t["input_schema"]
         L += ["", f"## {n}", "", t["description"], "",
+              f"- **Arquivo:** [`solvis_tools/tools/{n}.py`](../solvis_tools/tools/{n}.py)",
               f"- **Perfis:** {', '.join(f'`{a}`' for a in t['agents'])}",
               f"- **Credencial:** `{t['access']}`",
               f"- **Lê:** {', '.join(t['reads'])}",

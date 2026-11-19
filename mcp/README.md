@@ -4,11 +4,10 @@ Servidor MCP em stdio, sem dependências (Python 3.9), com uma biblioteca de too
 
 | Arquivo | O que faz |
 |---|---|
-| `solvis_tools/__init__.py` | Registro: perfis, decorador `@tool`, validação de argumentos, credencial por tool |
-| `solvis_tools/analyst.py` | Métricas e catálogo (reaproveita `agent/agent.py`, uma implementação só) |
-| `solvis_tools/engineer.py` | Metadados e engenharia ligados à skill |
 | `server.py` | Protocolo MCP: `initialize`, `tools/list`, `tools/call`, `ping`; uma instância por perfil |
 | `gen_docs.py` | Gera `docs/tools.md`; `--check` falha se a documentação divergir do código |
+
+As tools ficam em [`solvis_tools/`](../solvis_tools/README.md), uma por arquivo.
 
 ## Pré-requisitos
 
@@ -54,7 +53,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | python3 mcp/ser
 
 ## Adicionar uma tool
 
-1. Escreva a função num módulo de `solvis_tools/` com `@tool(...)`: nome, perfis, credencial, descrição, parâmetros com descrição, o que lê, regras da skill ligadas e um exemplo. Sem esses campos ela não registra.
+1. Crie `solvis_tools/tools/<nome>.py` com a função decorada por `@tool(...)`: nome, perfis, credencial, descrição, parâmetros com descrição, o que lê, regras da skill ligadas e um exemplo. Sem esses campos ela não registra.
 2. SQL só com parâmetros tipados (`{nome:Tipo}`), nunca texto concatenado vindo do modelo.
 3. `python3 mcp/gen_docs.py` para atualizar `docs/tools.md`.
 4. `python3 ops/pipeline.py`: os testes rodam o exemplo de verdade, conferem a documentação e as referências da skill.

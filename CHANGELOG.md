@@ -11,7 +11,23 @@ Tudo local (`127.0.0.1`), na branch `slm-trainning`, com dados reais agregados d
 - **Treino LoRA v1** (`agent/train/`, `docs/training.md`, log em `ops/logs/training.log`): 352 conversas fictícias geradas da skill, MLX sobre Qwen3 1.7B 4 bits, 33 min no M1 8 GB. No mesmo backend, o holdout subiu de 25% para 62,5% e o tempo caiu de cerca de 20 s para 4 s por resposta, mas ainda abaixo do agente no Ollama (75%). Não adotado. Duas avaliações descartadas e registradas como inválidas (ClickHouse fora do ar; token `<|im_end|>` não removido).
 - **Brechas da v1 fechadas** (2026-11-19): o guardrail de métrica passa a reconhecer pedidos de volume ("quantas avaliações", "mais respostas") e bloqueia resposta tirada do n do NPS. "Taxa de resposta" entra nos avisos de capacidade e é recusada mesmo quando o modelo consulta o volume. São 3 testes novos, 37 no portão.
 - **Dados de treino v2:** geradores novos `volume_no_survey` (volume por loja ou pesquisa com `group_by`, sem inventar pesquisa), `volume_not_nps` e `distribution_read` (leitura de cada alternativa com % e n). Total de 482 conversas, com 804 exemplos de treino e 85 de validação. O gerador barrou duas perguntas da avaliação copiadas por engano; elas foram trocadas. A v2 ainda não foi treinada.
-- **Biblioteca de gráficos** (`agent/charts.py`, `agent/static/charts.js`, `docs/charts.md`): a tool `chart` tem 11 tipos: barras, ranking horizontal, linha, área, combo volume+NPS, 100% empilhado, rosca, histograma 0-10, dispersão, mapa de calor (volume ou NPS) e perfil de notas por pergunta. A hora entra nas respostas e nas contagens pré-agregadas (`hour` em `raw.answers` e `semantic.answer_counts_daily`) e o agente passa a ler `started_at`, `channel` e `completed` das avaliações. A legenda é gerada pelo código. O pedido "não quero ver os números" esconde valores no desenho e na legenda. Amostra pequena, `min_n` em rankings e escalas de amplitude diferente seguem a skill. Há 17 testes novos (54 no portão) e 7 pedidos reais validados com o modelo. Também foi corrigida a tela, que caía com "Load failed" quando o servidor do agente estava parado.
+- **Tools reorganizadas em módulo** (`solvis_tools/`, `solvis_tools/README.md`): uma tool por arquivo em `tools/` (18 arquivos) e núcleo compartilhado em `core/`:
+  - `db`: ClickHouse por credencial;
+  - `periods`: presets em datas;
+  - `resolve`: nomes em ids e cobertura;
+  - `skill`: leitura da skill;
+  - `skill_index`: índice vetorial;
+  - `charts`: especificação dos gráficos.
+
+  O agente, o MCP e o gerador de documentação usam o mesmo registro. Validação em dois modos: estrita no MCP e tolerante no agente. Saem `mcp/solvis_tools/`, `agent/charts.py` e `agent/context.py`, e o `agent/agent.py` cai de 861 para 554 linhas, sem mudar o resultado (portão: 63/63). Novo teste: um arquivo por tool.
+- **Contexto entre turnos da conversa** (falhas reais na tela):
+  - **Turnos independentes:** cada pergunta nova vai ao modelo sozinha. O histórico inteiro fazia o modelo repetir a chamada anterior: depois de um heatmap, "gráfico do NPS por unidade, top 10" virava heatmap de novo.
+  - **Continuações:** só continuações curtas ("e por Regional?") levam a pergunta anterior, e o recorte novo é aplicado pelo código.
+  - **Pedido do usuário prevalece no gráfico:** o tipo, a métrica e o "top N" saem do pedido. "Top N superior de 10" devolvia 15 linhas.
+  - **Erros de digitação:** "o nos atual" vira "o NPS atual".
+  - **Pesquisa não citada:** quando só uma tem dados, o código a usa e declara. Isso também vale quando o modelo copia o marcador `"..."` do prompt (exemplos do prompt sem marcador).
+  - **Testes:** 9 novos.
+- **Biblioteca de gráficos** (hoje em `solvis_tools/core/charts.py`; desenho em `agent/static/charts.js`; `docs/charts.md`): a tool `chart` tem 11 tipos: barras, ranking horizontal, linha, área, combo volume+NPS, 100% empilhado, rosca, histograma 0-10, dispersão, mapa de calor (volume ou NPS) e perfil de notas por pergunta. A hora entra nas respostas e nas contagens pré-agregadas (`hour` em `raw.answers` e `semantic.answer_counts_daily`) e o agente passa a ler `started_at`, `channel` e `completed` das avaliações. A legenda é gerada pelo código. O pedido "não quero ver os números" esconde valores no desenho e na legenda. Amostra pequena, `min_n` em rankings e escalas de amplitude diferente seguem a skill. Há 17 testes novos (54 no portão) e 7 pedidos reais validados com o modelo. Também foi corrigida a tela, que caía com "Load failed" quando o servidor do agente estava parado.
 - **Treino organizado por versão:** `ops/training/v1/` e `ops/training/v2/` trazem dados e manifesto (configuração, hash, resultado ou plano). A v1 se reproduz byte a byte pelo gerador. `train.py --version` lê a pasta da versão, e `agent/train/README.md` resume o processo. Removido `agent/enrich.py` (enriquecimento por Modelfile, nunca executado, substituído pelo treino).
 
 ### Motor do piloto

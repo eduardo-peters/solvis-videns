@@ -51,7 +51,7 @@ def code_hash():
     """Versão do que define o comportamento: agente, tools/MCP, views, acessos, catálogo, portão e skill."""
     h = hashlib.sha256()
     files = sorted(list((ROOT / "agent").glob("*.py")) + list((ROOT / "clickhouse").glob("*.sql")) +
-                   list((ROOT / "mcp").rglob("*.py")) + list((ROOT / "ops").glob("*.sql")) +
+                   list((ROOT / "mcp").rglob("*.py")) + list((ROOT / "solvis_tools").rglob("*.py")) + list((ROOT / "ops").glob("*.sql")) +
                    [ROOT / "ops/metadata_catalog.json", ROOT / "ops/gate.json"] +
                    list((ROOT / "skills/solvis-survey-analysis-pilot/references").glob("*.md")) +
                    [ROOT / "skills/solvis-survey-analysis-pilot/SKILL.md"])
@@ -127,12 +127,12 @@ def health():
         f"último dia carregado {last['d']}; {last['n']} dia(s) no total")
 
     # Regras da skill indexadas = arquivos atuais (detecta skill alterada sem reindexar).
-    sys.path.insert(0, str(ROOT / "agent"))
-    import context
+    sys.path.insert(0, str(ROOT))
+    from solvis_tools.core import skill_index as context
     expected = len(context.chunks())
     have = int(q("SELECT count() c FROM semantic.skill_chunks")[0]["c"])
     add("skill_index_current", "ok" if have == expected else "fail", have, expected,
-        "trechos indexados × trechos da skill atual (rode agent/context.py index)")
+        "trechos indexados × trechos da skill atual (rode python3 -m solvis_tools.core.skill_index index)")
 
     insert("ops.data_health", checks)
     return checks
