@@ -68,7 +68,7 @@ Decisão do usuário sobre o texto de perguntas protegidas por LGPD (passo 4 do 
 
 ## `/contexto [texto]`
 
-Descrição do cliente ([client-context.md](client-context.md)).
+Descrição do cliente, usada como contexto para a análise dos dados ([client-context.md](client-context.md)). Ao pedir ou mostrar, diga para que ela serve.
 
 1. `context`. Sem argumento: mostre o texto guardado (ou diga que não há) e onde está (`file`); com `status: not_asked`, faça a pergunta do passo 5 do primeiro uso.
 2. Com texto: se for complemento ("a partir de março a pesquisa mudou"), escreva-o em Markdown e rode `context --file - --append`; se o usuário quiser refazer, `context --file -`. Com "não quero descrever", `context --none`.
@@ -76,7 +76,7 @@ Descrição do cliente ([client-context.md](client-context.md)).
 
 ## `/marca [arquivo | endereço | "não tenho"]`
 
-Perfil de marca para relatórios e decks ([materials.md](materials.md)).
+Perfil de marca, usado só para dar a aparência da empresa a relatórios e decks ([materials.md](materials.md)). Ao pedir, diga para que serve e que os números não mudam.
 
 1. `brand`. Mostre `status` e, se houver perfil, um resumo (cliente, cores, fontes, logo, termos, arquivos) e onde está guardado (`file`).
 2. Sem argumento e `status: not_asked`: faça a pergunta de materiais de referência de `materials.md`. Com arquivo: `brand --asset <caminho>` e, se for manual ou modelo, leia-o e grave o que aprendeu com `brand --file -`. Com endereço de site: visite só esse endereço, extraia cores, logo, fontes e tom e grave com `brand --file -`. Com "não tenho": `brand --none`.

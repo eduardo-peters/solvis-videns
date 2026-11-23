@@ -4,7 +4,11 @@ No primeiro uso, depois de credencial, mês inicial e decisão sobre texto LGPD,
 
 ## O que perguntar
 
-Uma mensagem só, curta, dizendo que ele pode responder em texto livre e pular o que não souber. Cubra, na ordem que fizer sentido (lista em `suggested_sections` de `context`):
+Uma mensagem só, curta. **Abra dizendo para que serve:** o que ele contar será usado como contexto em todas as análises dos dados, para escolher a pesquisa e a pergunta certas, entender os recortes e interpretar os resultados na língua da empresa. Sem esse porquê, muita gente não entende o que deve escrever aqui. Diga também que ele pode responder em texto livre, como explicaria a empresa a alguém novo no time, e pular o que não souber. Texto modelo, para adaptar:
+
+> Antes de começar, preciso entender a sua empresa. O que você me contar aqui vai servir de contexto para todas as análises: é com isso que eu escolho a pesquisa e a pergunta certas, entendo os seus recortes (lojas, regionais, bandeiras) e interpreto subidas e quedas do jeito que fazem sentido para vocês. Não é um cadastro, e fica guardado só no seu computador. Me conte, em texto livre e pulando o que não souber: o que a empresa faz e para quem; para que servem as pesquisas e em que momento são aplicadas; como a operação se organiza; metas e o que é um resultado bom para vocês; campanhas, datas fortes e mudanças recentes; como vocês chamam as coisas (qual pergunta é o CSAT de vocês, por exemplo); e quem vai ler as análises.
+
+Cubra, na ordem que fizer sentido (lista em `suggested_sections` de `context`):
 
 1. **Quem é o cliente:** setor, porte, o que vende e para quem.
 2. **Finalidade das pesquisas:** o que cada pesquisa mede, em que momento é aplicada (pós-compra, pós-atendimento, totem na loja) e por qual canal.

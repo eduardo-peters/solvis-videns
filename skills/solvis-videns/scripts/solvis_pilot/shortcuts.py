@@ -19,9 +19,11 @@ from .resolve import resolve
 from .store import Store
 from .sync import set_start_month, start_month_info
 
-CONTEXT_ASK_STEP = ("Peça ao usuário uma descrição de quem é o cliente, para que servem as pesquisas, metas, "
-                    "sazonalidade e o que mais ajudar a analisar os dados; escreva em Markdown e rode "
-                    "`context --file -` (ou `context --none` se ele preferir não descrever).")
+CONTEXT_ASK_STEP = ("Explique ao usuário que a descrição da empresa dele será usada como contexto para a análise "
+                    "dos dados (escolher pesquisa e pergunta, entender recortes, interpretar subidas e quedas) e "
+                    "peça, em texto livre, quem é o cliente, para que servem as pesquisas, metas, sazonalidade e o "
+                    "que mais ajudar; escreva em Markdown e rode `context --file -` (ou `context --none` se ele "
+                    "preferir não descrever).")
 REFRESH_MARK = "update_refreshed_at:{}"
 REFRESH_SKIP_S = 1800   # /atualizar repetido em menos de 30 min não baixa de novo os dias recentes
 UNIT_MAX_SURVEYS = 5
